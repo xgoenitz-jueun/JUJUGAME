@@ -6,6 +6,7 @@ html, body, #game { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 #overlay { position: absolute; inset: 0; pointer-events: none; user-select: none; -webkit-user-select: none; }
 #hud { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left: calc(14px + env(safe-area-inset-left)); padding: 10px 14px; background: rgba(10, 28, 56, .74); border: 1px solid rgba(214, 236, 255, .35); border-radius: 15px; min-width: 220px; max-width: min(330px, 65vw); box-shadow: 0 8px 30px #09163355; }
 .hud-title { font-size: 14px; font-weight: 750; margin-bottom: 5px; }
+#progress { font-size: 11px; color: #d8e5ff; margin-bottom: 4px; }
 .bar-label { display: flex; justify-content: space-between; gap: 15px; font-size: 12px; }
 .bar { height: 9px; margin: 3px 0 6px; border-radius: 8px; background: #19233b; overflow: hidden; }
 .bar i { display: block; width: 100%; height: 100%; transition: width .13s; }
@@ -13,6 +14,13 @@ html, body, #game { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 .mp i { background: linear-gradient(90deg, #2784e8, #82d5ff); }
 #status { font-size: 12px; line-height: 1.3; color: #e6ecff; }
 #hint { position: absolute; top: calc(16px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); border-radius: 12px; padding: 8px 11px; max-width: 44vw; background: #0a1c38bb; color: #e6ecff; font-size: 12px; }
+#menu-toggle { pointer-events: auto; touch-action: manipulation; position: absolute; z-index: 5; top: calc(74px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); border: 1px solid #d6edff99; border-radius: 12px; padding: 9px 12px; background: #1d437de0; color: white; font-weight: 700; }
+#menu-panel { pointer-events: auto; touch-action: pan-y; position: absolute; z-index: 5; top: calc(120px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); width: min(360px, 80vw); max-height: min(65vh, 520px); overflow: auto; padding: 13px; background: #0e213cef; border: 1px solid #c3e1ff88; border-radius: 15px; box-shadow: 0 7px 30px #0a1a3880; font-size: 12px; }
+#menu-panel[hidden] { display: none; }
+#menu-panel h2 { font-size: 13px; margin: 10px 0 6px; color: #b2d8ff; }
+.menu-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px solid #b8d8ff22; }
+.menu-row button, .stat-grid button { min-height: 32px; border: 1px solid #b8d8ff88; background: #305887; color: white; border-radius: 9px; padding: 5px 10px; white-space: nowrap; }
+.stat-grid { display: flex; gap: 6px; flex-wrap: wrap; }
 #move-zone { pointer-events: auto; touch-action: none; position: absolute; left: env(safe-area-inset-left); bottom: env(safe-area-inset-bottom); width: 48%; height: 56%; }
 #move-zone::before { content: "拖曳移動"; position: absolute; bottom: 58px; left: 28px; font-size: 12px; opacity: .68; }
 #joystick { position: absolute; width: 114px; height: 114px; border-radius: 50%; border: 2px solid #ddf4ff88; background: #caedff33; transform: translate(-50%, -50%); opacity: 0; transition: opacity .1s; }
@@ -29,6 +37,8 @@ html, body, #game { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 @media (orientation: portrait) {
   #hud { max-width: 75vw; }
   #hint { top: calc(130px + env(safe-area-inset-top)); right: 12px; max-width: 70vw; font-size: 11px; }
+  #menu-toggle { top: calc(190px + env(safe-area-inset-top)); }
+  #menu-panel { top: calc(235px + env(safe-area-inset-top)); max-height: 43vh; }
   #move-zone { height: 35%; width: 45%; }
   #action-zone { transform: scale(.8); transform-origin: right bottom; width: 300px; }
 }

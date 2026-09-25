@@ -1,4 +1,5 @@
 export type Action = 'attack' | 'ki' | 'jump' | 'roll' | 'crouch';
+import type { Progression } from '../systems/Progression';
 
 /** DOM overlay keeps each touch action independent of the game canvas. */
 export class Controls {
@@ -12,18 +13,22 @@ export class Controls {
   readonly axes = { x: 0, y: 0 };
   private readonly pressed = new Set<Action>();
 
-  constructor(private onAction: (action: Action, pressed: boolean) => void) {
+  constructor(private onAction: (action: Action, pressed: boolean) => void,
+    private onMenu: (command: string, id: string) => void = () => {}) {
     const game = document.querySelector('#game');
     if (!game) throw new Error('Missing #game element');
     this.root = document.createElement('div');
     this.root.id = 'overlay';
     this.root.innerHTML = `
       <div id="hud"><div class="hud-title">Phase 1 · 操作／戰鬥原型</div>
+        <div id="progress">第一關 · Lv3 · 金錢 0 · 點數 0</div>
         <div class="bar-label">HP <span id="hp-value"></span></div><div class="bar hp"><i id="hp-fill"></i></div>
         <div class="bar-label">MP <span id="mp-value"></span></div><div class="bar mp"><i id="mp-fill"></i></div>
         <div id="status" role="status" aria-live="polite">移動靠近練習標靶，試試三段連擊</div>
       </div>
       <div id="hint">鍵盤：WASD／方向鍵移動 · J 攻擊（長按蓄力） · G 氣功 · K 跳 · L 翻滾 · C 蹲下</div>
+      <button id="menu-toggle" aria-label="開關背包商店與配點選單" aria-expanded="false">背包／商店</button>
+      <section id="menu-panel" aria-label="背包商店與配點" hidden></section>
       <div id="move-zone" aria-label="移動搖桿觸控區"><div id="joystick"><div id="stick"></div></div></div>
       <div id="action-zone">
         <button data-action="jump" aria-label="跳躍">跳躍</button>
@@ -40,6 +45,16 @@ export class Controls {
     this.arena.addEventListener('pointermove', this.moveStick);
     this.arena.addEventListener('pointerup', this.endStick);
     this.arena.addEventListener('pointercancel', this.endStick);
+    const toggle = this.root.querySelector('#menu-toggle') as HTMLButtonElement;
+    const panel = this.root.querySelector('#menu-panel') as HTMLElement;
+    toggle.addEventListener('click', () => {
+      panel.hidden = !panel.hidden;
+      toggle.setAttribute('aria-expanded', String(!panel.hidden));
+    });
+    panel.addEventListener('click', event => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-menu]');
+      if (button) this.onMenu(button.dataset.menu || '', button.dataset.id || '');
+    });
     for (const button of Array.from(this.root.querySelectorAll<HTMLButtonElement>('[data-action]'))) {
       const action = button.dataset.action as Action;
       button.addEventListener('pointerdown', (event: PointerEvent) => {
@@ -93,11 +108,28 @@ export class Controls {
     this.joystick.classList.remove('visible');
   };
 
-  setMeters(hp: number, mp: number): void {
-    (this.root.querySelector('#hp-fill') as HTMLElement).style.width = `${hp}%`;
-    (this.root.querySelector('#mp-fill') as HTMLElement).style.width = `${mp}%`;
-    (this.root.querySelector('#hp-value') as HTMLElement).textContent = `${Math.ceil(hp)} / 100`;
-    (this.root.querySelector('#mp-value') as HTMLElement).textContent = `${Math.ceil(mp)} / 100`;
+  setMeters(hp: number, mp: number, maxHp = 100, maxMp = 100): void {
+    (this.root.querySelector('#hp-fill') as HTMLElement).style.width = `${Math.max(0, hp / maxHp * 100)}%`;
+    (this.root.querySelector('#mp-fill') as HTMLElement).style.width = `${Math.max(0, mp / maxMp * 100)}%`;
+    (this.root.querySelector('#hp-value') as HTMLElement).textContent = `${Math.ceil(hp)} / ${maxHp}`;
+    (this.root.querySelector('#mp-value') as HTMLElement).textContent = `${Math.ceil(mp)} / ${maxMp}`;
+  }
+
+  renderMenu(progress: Progression, stageName: string): void {
+    (this.root.querySelector('.hud-title') as HTMLElement).textContent = `Phase 2 · ${stageName}`;
+    (this.root.querySelector('#progress') as HTMLElement).textContent = `Lv${progress.data.level} · 金錢 ${progress.data.coins} · 可用點數 ${progress.unspent}`;
+    const panel = this.root.querySelector('#menu-panel') as HTMLElement;
+    const rows = progress.items().map(item => `<div class="menu-row"><span>${item.name} · ${item.price} 金</span><button data-menu="buy" data-id="${item.id}">購買</button></div>`).join('');
+    const owned = progress.data.ownedEquipment.map(id => {
+      const item = progress.item(id);
+      return item ? `<div class="menu-row"><span>${item.name}${progress.data.equipped[item.slot || 'weapon'] === id ? ' ✓' : ''}</span><button data-menu="equip" data-id="${id}">裝備</button></div>` : '';
+    }).join('') || '尚無裝備';
+    const inventory = Object.entries(progress.data.consumables).filter(([, count]) => count > 0).map(([id, count]) => {
+      const item = progress.item(id);
+      return item ? `<div class="menu-row"><span>${item.name} ×${count}</span><button data-menu="use" data-id="${id}">使用</button></div>` : '';
+    }).join('') || '尚無補給';
+    panel.innerHTML = `<h2>補給商店與裝備店</h2>${rows}<h2>背包 · 補給</h2>${inventory}<h2>背包 · 裝備</h2>${owned}<h2>技能點數 (${progress.unspent})</h2>
+      <div class="stat-grid">${(['STR', 'DEF', 'MAGIC', 'SPD', 'VIT'] as const).map(stat => `<button data-menu="stat" data-id="${stat}">${stat} ${progress.data.stats[stat]} ＋</button>`).join('')}</div>`;
   }
 
   announce(message: string): void {

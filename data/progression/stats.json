@@ -1,1 +1,1 @@
-{}
+{"maxTotalSkillPoints":50,"stats":["STR","DEF","MAGIC","SPD","VIT"],"pointValuePerStat":{"STR":{"attackPerPoint":1.5},"DEF":{"damageReductionPerPoint":0.4},"MAGIC":{"skillDamagePerPoint":1.5,"maxMpPerPoint":3},"SPD":{"moveSpeedPerPoint":1.2},"VIT":{"maxHpPerPoint":8}}}

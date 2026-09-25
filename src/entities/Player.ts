@@ -20,6 +20,10 @@ export class Player {
   private heldFor = 0;
   private crouchHeld = false;
   private rollDirection = 1;
+  private hurtLeft = 0;
+  maxHp: number = prototype.hp;
+  maxMp: number = prototype.mp;
+  speedBonus = 0;
 
   constructor(private scene: Phaser.Scene, x: number, depthY: number, private hooks: Hooks) {
     this.snapshot = { x, depthY, elevation: 0, facing: 1, pose: 'idle', hp: prototype.hp, mp: prototype.mp, invulnerable: false, charge: 0 };
@@ -30,6 +34,46 @@ export class Player {
 
   get isRolling(): boolean { return this.rollLeft > 0; }
   get isCrouching(): boolean { return this.crouchHeld && this.snapshot.elevation === 0 && !this.isRolling; }
+
+  receiveDamage(amount: number): number {
+    if (this.snapshot.invulnerable || this.hurtLeft > 0 || this.snapshot.hp <= 0) return 0;
+    const taken = Math.max(1, Math.round(amount));
+    this.snapshot.hp = Math.max(0, this.snapshot.hp - taken);
+    this.hurtLeft = 0.7;
+    this.render();
+    return taken;
+  }
+
+  heal(amount: number): number {
+    const before = this.snapshot.hp;
+    this.snapshot.hp = Math.min(this.maxHp, before + amount);
+    return this.snapshot.hp - before;
+  }
+
+  setMaximums(hp: number, mp: number, speedBonus: number): void {
+    const oldHp = this.maxHp;
+    this.maxHp = hp;
+    this.maxMp = mp;
+    this.speedBonus = speedBonus;
+    this.snapshot.hp = Math.min(hp, this.snapshot.hp + Math.max(0, hp - oldHp));
+    this.snapshot.mp = Math.min(mp, this.snapshot.mp);
+  }
+
+  revive(x: number, depthY: number): void {
+    this.snapshot.x = x;
+    this.snapshot.depthY = depthY;
+    this.snapshot.elevation = 0;
+    this.snapshot.hp = this.maxHp;
+    this.snapshot.mp = this.maxMp;
+    this.snapshot.invulnerable = false;
+    this.snapshot.charge = 0;
+    this.rollLeft = 0;
+    this.hurtLeft = 0;
+    this.attackLeft = 0;
+    this.held = null;
+    this.heldFor = 0;
+    this.crouchHeld = false;
+  }
 
   beginAttack(kind: 'attack' | 'ki'): void {
     if (this.held || this.isRolling || this.snapshot.hp <= 0) return;
@@ -76,6 +120,7 @@ export class Player {
   update(dt: number, dx: number, dy: number, bounds: { width: number; near: number; far: number }): void {
     const s = this.snapshot;
     this.rollLeft = Math.max(0, this.rollLeft - dt);
+    this.hurtLeft = Math.max(0, this.hurtLeft - dt);
     this.attackLeft = Math.max(0, this.attackLeft - dt);
     this.comboLeft = Math.max(0, this.comboLeft - dt);
     if (!this.comboLeft) this.comboStep = 0;
@@ -93,7 +138,7 @@ export class Player {
     } else {
       s.invulnerable = false;
       const movementFactor = this.isCrouching ? 0.4 : 1;
-      s.x += dx * prototype.walkSpeed * movementFactor * dt;
+      s.x += dx * (prototype.walkSpeed + this.speedBonus) * movementFactor * dt;
       s.depthY += dy * prototype.depthSpeed * movementFactor * dt;
       if (dx !== 0) s.facing = dx > 0 ? 1 : -1;
     }
@@ -104,8 +149,8 @@ export class Player {
       this.velocityZ -= prototype.gravity * dt;
       if (s.elevation <= 0) { s.elevation = 0; this.velocityZ = 0; }
     }
-    s.mp = Math.min(prototype.mp, s.mp + prototype.mpRegenerationPerSecond * dt);
-    const pose: Pose = this.isRolling ? 'roll' : s.charge > 0 ? 'charge' : this.isCrouching ? 'crouch' : s.elevation > 0 ? 'jump' : this.attackLeft > 0 ? 'attack' : dx || dy ? 'move' : 'idle';
+    s.mp = Math.min(this.maxMp, s.mp + prototype.mpRegenerationPerSecond * dt);
+    const pose: Pose = s.hp <= 0 ? 'dead' : this.isRolling ? 'roll' : this.hurtLeft > 0 ? 'hurt' : s.charge > 0 ? 'charge' : this.isCrouching ? 'crouch' : s.elevation > 0 ? 'jump' : this.attackLeft > 0 ? 'attack' : dx || dy ? 'move' : 'idle';
     s.pose = pose;
     this.render();
   }
@@ -119,7 +164,7 @@ export class Player {
     const crouch = s.pose === 'crouch' || s.pose === 'roll';
     const h = crouch ? 56 : 78;
     const bottom = 0;
-    g.fillStyle(s.invulnerable ? 0x99c2ef : 0xf8f2fb).fillRoundedRect(-21, -h + 28, 42, h - 36, 13);
+    g.fillStyle(s.invulnerable ? 0x99c2ef : s.pose === 'hurt' ? 0xffb9c6 : 0xf8f2fb).fillRoundedRect(-21, -h + 28, 42, h - 36, 13);
     g.fillStyle(0x659be3).fillRoundedRect(-22, bottom - 22, 17, 20, 5).fillRoundedRect(5, bottom - 22, 17, 20, 5);
     g.fillStyle(0xf8d9cc).fillCircle(0, -h + 17, 23);
     g.fillStyle(0x35324d).fillRoundedRect(-23, -h - 5, 46, 16, 7);

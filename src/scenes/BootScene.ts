@@ -1,45 +1,57 @@
 import Phaser from 'phaser';
+import stage1 from '../../data/levels/stage1.json';
+import stage2 from '../../data/levels/stage2.json';
+import { Enemy, ENEMIES, type Pattern } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { prototype } from '../config/prototype';
+import { Progression, type Stat } from '../systems/Progression';
 import { Controls, type Action } from '../ui/Controls';
 
-interface Projectile {
-  x: number;
-  depthY: number;
-  elevation: number;
-  direction: 1 | -1;
-  power: number;
-  life: number;
-  sprite: Phaser.GameObjects.Graphics;
-}
+type Level = {
+  id: string; number: number; name: string; worldWidth: number; background: string;
+  checkpoints: { id: string; position: number }[];
+  spawnTable: { enemyId: string; positions: number[] }[];
+  boss: { enemyId: string; position: number };
+  levelUpOnClear: number;
+};
+type Shot = { x: number; y: number; elevation: number; direction: number; damage: number;
+  slow: number; owner: 'enemy' | 'player'; power: number; life: number; graphic: Phaser.GameObjects.Graphics };
+type Drop = { x: number; y: number; coins: number; points: number; graphic: Phaser.GameObjects.Graphics };
+const LEVELS: Record<number, Level> = { 1: stage1, 2: stage2 };
 
-/** Phase 1 sandbox: one passive training target; enemy AI and stages begin in Phase 2. */
+/** Phases 1–2. JSON drives enemy stats, layouts, checkpoints and shop items. */
 export class BootScene extends Phaser.Scene {
   private player!: Player;
   private ui!: Controls;
+  private progress!: Progression;
   private background!: Phaser.GameObjects.Graphics;
-  private target!: Phaser.GameObjects.Graphics;
-  private targetLabel!: Phaser.GameObjects.Text;
-  private targetHp: number = prototype.dummyHp;
-  private targetFlash = 0;
-  private respawnIn = 0;
-  private projectiles: Projectile[] = [];
+  private markers!: Phaser.GameObjects.Graphics;
+  private level!: Level;
+  private enemies: Enemy[] = [];
+  private shots: Shot[] = [];
+  private drops: Drop[] = [];
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
-  private targetX = 0;
-  private targetY = 0;
+  private slowLeft = 0;
+  private deadPending = false;
+  private finished = false;
 
   constructor() { super('Boot'); }
 
   create(): void {
+    this.progress = new Progression(window.localStorage);
+    this.level = LEVELS[this.progress.data.stage];
     this.background = this.add.graphics().setDepth(-1000);
-    this.target = this.add.graphics();
-    this.targetLabel = this.add.text(0, 0, '', { color: '#f2f6ff', fontFamily: 'sans-serif', fontSize: '13px', align: 'center' }).setOrigin(0.5);
-    this.player = new Player(this, this.scale.width * 0.24, this.scale.height * 0.59, {
-      onMelee: step => this.hitWithMelee(step),
-      onKi: (x, depthY, elevation, direction, power) => this.spawnKi(x, depthY, elevation, direction, power)
+    this.markers = this.add.graphics().setDepth(-100);
+    const checkpoint = this.progress.data.checkpoints[String(this.level.number)];
+    this.player = new Player(this, checkpoint ? checkpoint.position + 18 : 120, this.scale.height * .59, {
+      onMelee: step => this.melee(step),
+      onKi: (x, y, elevation, direction, power) => this.spawnShot({
+        x: x + direction * 38, y, elevation, direction, damage: Math.round(20 + power * 12 + this.progress.magicBonus),
+        slow: 0, owner: 'player', power
+      })
     });
-    this.ui = new Controls((action, pressed) => this.action(action, pressed));
-    this.ui.setMeters(this.player.snapshot.hp, this.player.snapshot.mp);
+    this.ui = new Controls((action, pressed) => this.action(action, pressed),
+      (command, id) => this.menuAction(command, id));
     const keyboard = this.input.keyboard;
     if (keyboard) {
       this.keys = keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,J,G,K,L,C') as Record<string, Phaser.Input.Keyboard.Key>;
@@ -48,133 +60,294 @@ export class BootScene extends Phaser.Scene {
         this.keys[key].on('down', () => this.action(action, true));
         this.keys[key].on('up', () => this.action(action, false));
       }
-      keyboard.addCapture(['UP', 'DOWN', 'LEFT', 'RIGHT', 'SPACE']);
-    } else {
-      this.keys = {};
-    }
-    this.layout();
+      keyboard.addCapture(['UP', 'DOWN', 'LEFT', 'RIGHT']);
+    } else this.keys = {};
+    this.loadStage(this.level.number, true);
     this.scale.on('resize', this.layout, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.layout, this);
       this.ui.destroy();
       this.player.destroy();
-      for (const shot of this.projectiles) shot.sprite.destroy();
+      this.clearStage();
     });
+  }
+
+  private loadStage(number: number, resume = false): void {
+    this.clearStage();
+    this.level = LEVELS[number];
+    this.finished = false;
+    this.deadPending = false;
+    this.slowLeft = 0;
+    const cp = resume ? this.progress.data.checkpoints[String(number)] : undefined;
+    const startX = cp ? cp.position + 18 : 120;
+    this.player.setMaximums(this.progress.maxHp, this.progress.maxMp, this.progress.speedBonus);
+    this.player.revive(startX, this.scale.height * .59);
+    for (const wave of this.level.spawnTable) {
+      wave.positions.forEach((x, index) => {
+        if (cp && x < cp.position - 70) return;
+        this.enemies.push(new Enemy(this, ENEMIES[wave.enemyId], x, this.depthFor(index),
+          (enemy, pattern) => this.enemyAttack(enemy, pattern)));
+      });
+    }
+    this.enemies.push(new Enemy(this, ENEMIES[this.level.boss.enemyId], this.level.boss.position, this.scale.height * .59,
+      (enemy, pattern) => this.enemyAttack(enemy, pattern)));
+    this.cameras.main.setBounds(0, 0, this.level.worldWidth, this.scale.height);
+    this.layout();
+    this.refreshHud();
+    this.ui.announce(`${this.level.name}：擊敗怪物、啟動傳送點，再挑戰 Boss`);
+  }
+
+  private depthFor(index: number): number { return this.scale.height * (.54 + (index % 3 - 1) * .065); }
+
+  private clearStage(): void {
+    this.enemies.forEach(enemy => enemy.destroy());
+    this.shots.forEach(shot => shot.graphic.destroy());
+    this.drops.forEach(drop => drop.graphic.destroy());
+    this.enemies = [];
+    this.shots = [];
+    this.drops = [];
   }
 
   private action(action: Action, pressed: boolean): void {
+    if (this.deadPending || this.finished) return;
     if (action === 'attack' || action === 'ki') {
       if (pressed) this.player.beginAttack(action); else this.player.endAttack(action);
     } else if (action === 'jump' && pressed) this.player.jump();
-    else if (action === 'roll' && pressed) this.player.roll(this.directionX());
+    else if (action === 'roll' && pressed) this.player.roll(this.moveX());
     else if (action === 'crouch') this.player.setCrouch(pressed);
   }
 
-  private isDown(...names: string[]): boolean { return names.some(name => this.keys[name]?.isDown); }
-  private directionX(): number {
-    return Phaser.Math.Clamp(this.ui.axes.x + Number(this.isDown('D', 'RIGHT')) - Number(this.isDown('A', 'LEFT')), -1, 1);
-  }
-  private directionY(): number {
-    return Phaser.Math.Clamp(this.ui.axes.y + Number(this.isDown('S', 'DOWN')) - Number(this.isDown('W', 'UP')), -1, 1);
+  private menuAction(command: string, id: string): void {
+    if (command === 'buy') this.ui.announce(this.progress.buy(id));
+    if (command === 'equip') this.ui.announce(this.progress.equip(id));
+    if (command === 'stat') this.ui.announce(this.progress.allocate(id as Stat));
+    if (command === 'use') {
+      const amount = this.progress.use(id);
+      this.ui.announce(amount ? `回復 ${this.player.heal(amount)} HP` : '背包沒有此補給');
+    }
+    this.player.setMaximums(this.progress.maxHp, this.progress.maxMp, this.progress.speedBonus);
+    this.refreshHud();
   }
 
-  update(_time: number, deltaMs: number): void {
-    const dt = Math.min(deltaMs / 1000, 0.05);
-    const height = this.scale.height;
-    this.player.update(dt, this.directionX(), this.directionY(), {
-      width: this.scale.width,
-      near: height * (height > this.scale.width ? 0.35 : 0.44),
-      far: height * (height > this.scale.width ? 0.78 : 0.82)
-    });
-    this.ui.setMeters(this.player.snapshot.hp, this.player.snapshot.mp);
-    this.targetFlash = Math.max(0, this.targetFlash - dt);
-    if (this.respawnIn > 0) {
-      this.respawnIn -= dt;
-      if (this.respawnIn <= 0) {
-        this.targetHp = prototype.dummyHp;
-        this.ui.announce('練習標靶已重置；連點攻擊可打出三段連擊');
-      }
-    }
-    this.renderTarget();
-    for (let i = this.projectiles.length - 1; i >= 0; i--) {
-      const shot = this.projectiles[i];
-      shot.life += dt;
-      shot.x += shot.direction * 380 * dt;
-      const radius = 12 + Math.min(1, shot.life / 0.65) * (16 + shot.power * 15);
-      shot.sprite.clear();
-      shot.sprite.fillStyle(0xff63ca, 0.17).fillCircle(0, 0, radius + 14);
-      shot.sprite.fillStyle(0xff82d6, 0.9).fillCircle(0, 0, radius);
-      shot.sprite.fillStyle(0xffffff, 0.88).fillCircle(-radius * 0.2, -radius * 0.2, radius * 0.38);
-      shot.sprite.setPosition(shot.x, shot.depthY - shot.elevation - 39).setDepth(shot.depthY + 4);
-      if (this.targetHp > 0 && Math.abs(shot.x - this.targetX) < radius + 22 && Math.abs(shot.depthY - this.targetY) < 55) {
-        this.hitTarget(Math.round(20 + shot.power * 12), '氣功命中');
-        shot.life = 3;
-      }
-      if (shot.life > 2 || shot.x < -70 || shot.x > this.scale.width + 70) {
-        shot.sprite.destroy();
-        this.projectiles.splice(i, 1);
-      }
-    }
+  private down(...names: string[]): boolean { return names.some(name => this.keys[name]?.isDown); }
+  private moveX(): number {
+    return Phaser.Math.Clamp(this.ui.axes.x + Number(this.down('D', 'RIGHT')) - Number(this.down('A', 'LEFT')), -1, 1);
+  }
+  private moveY(): number {
+    return Phaser.Math.Clamp(this.ui.axes.y + Number(this.down('S', 'DOWN')) - Number(this.down('W', 'UP')), -1, 1);
   }
 
-  private hitWithMelee(step: number): void {
+  update(_time: number, elapsed: number): void {
+    const dt = Math.min(elapsed / 1000, .05), p = this.player.snapshot;
+    this.slowLeft = Math.max(0, this.slowLeft - dt);
+    const firstAlive = this.enemies.find(enemy => enemy.alive);
+    const barrier = firstAlive ? Math.min(this.level.worldWidth, firstAlive.x + 155) : this.level.worldWidth;
+    this.player.update(dt, this.deadPending || this.finished ? 0 : this.moveX() * (this.slowLeft > 0 ? .55 : 1),
+      this.deadPending || this.finished ? 0 : this.moveY() * (this.slowLeft > 0 ? .55 : 1), {
+        width: barrier,
+        near: this.scale.height * (this.scale.height > this.scale.width ? .35 : .44),
+        far: this.scale.height * (this.scale.height > this.scale.width ? .78 : .82)
+      });
+    this.cameras.main.scrollX = Phaser.Math.Clamp(p.x - this.scale.width * .30, 0,
+      Math.max(0, this.level.worldWidth - this.scale.width));
+    if (!this.deadPending && !this.finished) {
+      for (const enemy of this.enemies) enemy.update(dt, p);
+      this.checkCheckpoints();
+      this.checkDrops();
+      this.updateShots(dt);
+    }
+    this.ui.setMeters(p.hp, p.mp, this.player.maxHp, this.player.maxMp);
+  }
+
+  private melee(step: number): void {
     const p = this.player.snapshot;
-    if (this.targetHp > 0 && (this.targetX - p.x) * p.facing > -15 && (this.targetX - p.x) * p.facing < 94 && Math.abs(p.depthY - this.targetY) < 43) {
-      this.hitTarget(prototype.meleeDamage[step - 1], `第 ${step} 段命中`);
-    } else {
-      this.ui.announce(`第 ${step} 段揮擊；靠近標靶並對準相同縱深可命中`);
+    const damage = Math.round(prototype.meleeDamage[step - 1] + this.progress.attackBonus);
+    let hits = 0;
+    for (const enemy of this.enemies) {
+      if (!enemy.alive) continue;
+      const dx = (enemy.x - p.x) * p.facing;
+      if (dx < -15 || dx > 95 || Math.abs(enemy.depthY - p.depthY) > 52) continue;
+      hits++;
+      this.hitEnemy(enemy, damage);
+    }
+    this.ui.announce(hits ? `第 ${step} 段命中 ${hits} 隻怪物` : `第 ${step} 段揮擊；請靠近怪物並對準縱深`);
+  }
+
+  private hitEnemy(enemy: Enemy, damage: number): void {
+    if (enemy.hit(damage)) {
+      const graphic = this.add.graphics().setDepth(enemy.depthY + 2);
+      this.drops.push({ x: enemy.x, y: enemy.depthY, coins: enemy.config.coinDrop,
+        points: enemy.config.skillPointDrop, graphic });
+      this.drawDrop(this.drops[this.drops.length - 1]);
+      if (enemy.boss) {
+        const stage = this.level.number;
+        // Award Boss drops before the stage changes; otherwise the pickup would disappear.
+        const reward = this.drops.pop();
+        reward?.graphic.destroy();
+        this.progress.collect(enemy.config.coinDrop, enemy.config.skillPointDrop);
+        this.finished = true;
+        this.progress.clear(stage, this.level.levelUpOnClear);
+        this.refreshHud();
+        this.ui.announce(stage === 1 ? '哥布林已擊敗！進入第二關' : '小老虎已擊敗！Phase 2 兩關完成');
+        this.time.delayedCall(1100, () => {
+          if (stage === 1) this.loadStage(2);
+        });
+      }
     }
   }
 
-  private hitTarget(damage: number, action: string): void {
-    this.targetHp = Math.max(0, this.targetHp - damage);
-    this.targetFlash = 0.15;
-    if (this.targetHp === 0) {
-      this.respawnIn = 2;
-      this.ui.announce(`${action}！標靶暫時倒下，稍後重置`);
-    } else {
-      this.ui.announce(`${action} · ${damage} 傷害 · 標靶 HP ${this.targetHp}`);
+  private enemyAttack(enemy: Enemy, pattern: Pattern): void {
+    if (!enemy.alive || this.deadPending || this.finished) return;
+    const p = this.player.snapshot;
+    if (pattern.kind === 'buff') {
+      for (const other of this.enemies) if (other.alive && other.config.id === 'wolf' && Math.abs(other.x - enemy.x) < pattern.range) other.buffLeft = 3;
+      this.ui.announce('小野狼嚎叫：附近狼群短暫加速攻擊');
+      return;
+    }
+    const direction = p.x >= enemy.x ? 1 : -1;
+    if (pattern.kind === 'ranged') {
+      this.spawnShot({ x: enemy.x + direction * 34, y: enemy.depthY, elevation: 0, direction,
+        damage: pattern.damage, slow: pattern.slowSeconds || 0, owner: 'enemy', power: 0 });
+      return;
+    }
+    if (pattern.kind === 'lunge') enemy.x += direction * 32;
+    const range = pattern.range + (pattern.kind === 'wave' ? 10 : 0);
+    const canHit = Math.abs(p.x - enemy.x) < range && Math.abs(p.depthY - enemy.depthY) < (pattern.kind === 'wave' ? 95 : 47);
+    if (canHit && !(pattern.kind === 'wave' && p.elevation > 20)) this.damagePlayer(pattern.damage, pattern.kind);
+    if (pattern.kind === 'combo') this.time.delayedCall(210, () => {
+      if (enemy.alive && this.enemies.includes(enemy) && this.level.number === 2 && Math.abs(p.x - enemy.x) < range && Math.abs(p.depthY - enemy.depthY) < 47)
+        this.damagePlayer(pattern.damage, pattern.kind);
+    });
+  }
+
+  private damagePlayer(amount: number, kind: string): void {
+    if (this.deadPending || this.finished) return;
+    if (kind === 'ranged' && this.player.isCrouching) return;
+    const taken = this.player.receiveDamage(amount - this.progress.damageReduction);
+    if (taken) this.ui.announce(`受到 ${taken} 傷害；翻滾可避開攻擊`);
+    if (this.player.snapshot.hp <= 0) {
+      this.deadPending = true;
+      this.ui.announce('HP 歸零，從最近啟動的傳送點復活');
+      this.time.delayedCall(1100, () => this.revive());
     }
   }
 
-  private spawnKi(x: number, depthY: number, elevation: number, direction: 1 | -1, power: number): void {
-    this.projectiles.push({ x: x + direction * 38, depthY, elevation, direction, power, life: 0, sprite: this.add.graphics() });
-    this.ui.announce('粉紅氣功發射：能量球飛行時逐漸放大');
+  private revive(): void {
+    const cp = this.progress.data.checkpoints[String(this.level.number)];
+    this.player.revive(cp ? cp.position + 18 : 120, this.scale.height * .59);
+    this.deadPending = false;
+    this.clearStage();
+    this.loadStage(this.level.number, true);
+    this.ui.announce(cp ? `從 ${cp.id} 復活` : '從關卡起點復活');
+  }
+
+  private spawnShot(shot: Omit<Shot, 'life' | 'graphic'>): void {
+    this.shots.push({ ...shot, life: 0, graphic: this.add.graphics() });
+  }
+
+  private updateShots(dt: number): void {
+    const p = this.player.snapshot;
+    for (let i = this.shots.length - 1; i >= 0; i--) {
+      const shot = this.shots[i];
+      shot.life += dt;
+      shot.x += shot.direction * (shot.owner === 'player' ? 380 : 245) * dt;
+      const radius = shot.owner === 'player' ? 12 + Math.min(1, shot.life / .65) * (16 + shot.power * 15) : 10;
+      shot.graphic.clear();
+      shot.graphic.fillStyle(shot.owner === 'player' ? 0xff6ac9 : shot.slow ? 0xa9d0fa : 0xd0c4a4, .3).fillCircle(0, 0, radius + 9);
+      shot.graphic.fillStyle(shot.owner === 'player' ? 0xffa9e2 : shot.slow ? 0x6ba9f2 : 0xbbb19c).fillCircle(0, 0, radius);
+      shot.graphic.setPosition(shot.x, shot.y - shot.elevation - 36).setDepth(shot.y + 5);
+      let collided = false;
+      if (shot.owner === 'player') {
+        for (const enemy of this.enemies) {
+          if (enemy.alive && Math.abs(enemy.x - shot.x) < radius + 23 && Math.abs(enemy.depthY - shot.y) < 54) {
+            this.hitEnemy(enemy, shot.damage);
+            collided = true;
+            break;
+          }
+        }
+      } else if (Math.abs(p.x - shot.x) < radius + 17 && Math.abs(p.depthY - shot.y) < 38) {
+        const oldHp = p.hp;
+        this.damagePlayer(shot.damage, 'ranged');
+        if (shot.slow && p.hp < oldHp) this.slowLeft = shot.slow;
+        collided = true;
+      }
+      if (collided || shot.life > 3 || shot.x < 0 || shot.x > this.level.worldWidth) {
+        shot.graphic.destroy();
+        this.shots.splice(i, 1);
+      }
+    }
+  }
+
+  private drawDrop(drop: Drop): void {
+    const g = drop.graphic;
+    g.clear().fillStyle(0xfbd26c, .35).fillCircle(drop.x, drop.y - 21, 24);
+    g.fillStyle(0xffd65a).fillCircle(drop.x, drop.y - 21, 11);
+    g.fillStyle(0xffffff).fillCircle(drop.x + 4, drop.y - 28, 3);
+  }
+
+  private checkDrops(): void {
+    const p = this.player.snapshot;
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const drop = this.drops[i];
+      if (Math.abs(drop.x - p.x) > 45 || Math.abs(drop.y - p.depthY) > 45) continue;
+      this.progress.collect(drop.coins, drop.points);
+      drop.graphic.destroy();
+      this.drops.splice(i, 1);
+      this.refreshHud();
+      this.ui.announce(`拾取 ${drop.coins} 金錢、${drop.points} 技能點`);
+    }
+  }
+
+  private checkCheckpoints(): void {
+    const p = this.player.snapshot;
+    for (const cp of this.level.checkpoints) {
+      if (p.x < cp.position || cp.position <= (this.progress.data.checkpoints[String(this.level.number)]?.position || 0)) continue;
+      this.progress.checkpoint(this.level.number, cp.id, cp.position);
+      this.ui.announce('這是重生點，之後陣亡會從這裡復活');
+    }
+    this.drawMarkers();
+  }
+
+  private refreshHud(): void {
+    this.player.setMaximums(this.progress.maxHp, this.progress.maxMp, this.progress.speedBonus);
+    this.ui.renderMenu(this.progress, this.level.name);
+    this.ui.setMeters(this.player.snapshot.hp, this.player.snapshot.mp, this.player.maxHp, this.player.maxMp);
+    this.drawMarkers();
+  }
+
+  private drawMarkers(): void {
+    const g = this.markers;
+    g.clear();
+    for (const cp of this.level.checkpoints) {
+      const active = cp.position <= (this.progress.data.checkpoints[String(this.level.number)]?.position || 0);
+      const y = this.scale.height * .59;
+      g.fillStyle(active ? 0x8ff5e0 : 0x9bc8fb, .25).fillEllipse(cp.position, y + 4, 75, 23);
+      g.lineStyle(3, active ? 0x92f6da : 0x9bc8fb).strokeEllipse(cp.position, y + 4, 74, 23);
+      g.lineStyle(5, active ? 0x92f6da : 0x9bc8fb).lineBetween(cp.position, y - 95, cp.position, y - 9);
+      g.fillStyle(active ? 0x92f6da : 0xc5ddff).fillCircle(cp.position, y - 101, 12);
+    }
   }
 
   private layout(): void {
-    const w = this.scale.width, h = this.scale.height;
-    this.targetX = w * 0.72;
-    this.targetY = h * 0.59;
-    const g = this.background;
+    const w = this.level.worldWidth, h = this.scale.height, g = this.background;
+    this.cameras.main.setBounds(0, 0, w, h);
     g.clear();
-    g.fillGradientStyle(0x213860, 0x213860, 0x6080ab, 0x6080ab).fillRect(0, 0, w, h);
-    const horizon = h * (h > w ? 0.32 : 0.40);
-    g.fillStyle(0xb6cce9, 0.17).fillEllipse(w * .65, horizon - 20, w * 1.4, 190);
-    g.fillStyle(0x4b708e).fillRect(0, horizon, w, h - horizon);
-    for (let i = 0; i < 8; i++) {
-      const y = horizon + (h - horizon) * (i / 8) ** 1.5;
-      g.lineStyle(1, 0xc0dcf4, 0.12).lineBetween(0, y, w, y);
+    const forest = this.level.number === 2;
+    g.fillGradientStyle(forest ? 0x203c4f : 0x77aae2, forest ? 0x203c4f : 0x77aae2,
+      forest ? 0x5c8675 : 0xc6dcf4, forest ? 0x5c8675 : 0xc6dcf4).fillRect(0, 0, w, h);
+    const horizon = h * (h > this.scale.width ? .32 : .40);
+    g.fillStyle(forest ? 0x314b3a : 0x7db878).fillRect(0, horizon, w, h - horizon);
+    for (let x = 150; x < w; x += forest ? 220 : 320) {
+      g.fillStyle(forest ? 0x425f4c : 0x89ba82).fillEllipse(x, horizon - 8, forest ? 110 : 160, forest ? 160 : 48);
+      if (forest) {
+        g.fillStyle(0x423d3a).fillRect(x - 9, horizon - 120, 18, 127);
+        g.fillStyle(0x2a6048).fillCircle(x, horizon - 139, 49);
+      }
     }
-    for (let x = 0; x < w; x += 90) g.lineStyle(1, 0xc0dcf4, 0.08).lineBetween(x, horizon, x, h);
-    g.fillStyle(0xffffff, 0.13).fillRoundedRect(w * .48, horizon + 6, Math.max(120, w * .45), 32, 12);
-    this.renderTarget();
-  }
-
-  private renderTarget(): void {
-    const g = this.target;
-    g.clear();
-    this.targetLabel.setPosition(this.targetX, this.targetY - 113);
-    if (this.targetHp <= 0) { this.targetLabel.setText('標靶重置中…'); return; }
-    this.targetLabel.setText(`練習標靶 · ${this.targetHp}/${prototype.dummyHp}`);
-    g.setDepth(this.targetY + 1);
-    g.fillStyle(0x192b4b, 0.35).fillEllipse(this.targetX, this.targetY + 2, 59, 16);
-    g.fillStyle(this.targetFlash ? 0xffd3ec : 0xe9b272).fillRoundedRect(this.targetX - 20, this.targetY - 80, 40, 66, 9);
-    g.fillStyle(0xf7ddad).fillCircle(this.targetX, this.targetY - 83, 22);
-    g.lineStyle(4, 0x654756).strokeCircle(this.targetX, this.targetY - 83, 12);
-    g.fillStyle(0xc75c75).fillCircle(this.targetX, this.targetY - 83, 5);
-    g.fillStyle(0x182c4f).fillRoundedRect(this.targetX - 22, this.targetY - 11, 15, 13, 3).fillRoundedRect(this.targetX + 7, this.targetY - 11, 15, 13, 3);
-    g.fillStyle(0x1c2d47).fillRoundedRect(this.targetX - 35, this.targetY - 124, 70, 7, 4);
-    g.fillStyle(0xee6980).fillRoundedRect(this.targetX - 35, this.targetY - 124, 70 * this.targetHp / prototype.dummyHp, 7, 4);
+    g.fillStyle(forest ? 0x708467 : 0xb7c895).fillRect(0, horizon + 25, w, h - horizon - 25);
+    for (let x = 0; x < w; x += 150) {
+      g.fillStyle(forest ? 0xa0bc87 : 0xf3e4a0, .52).fillCircle(x + 55, h * .75 + x % 41, 3);
+    }
+    this.drawMarkers();
   }
 }
