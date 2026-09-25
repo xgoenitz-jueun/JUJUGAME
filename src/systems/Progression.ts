@@ -1,6 +1,8 @@
 import statsData from '../../data/progression/stats.json';
 import stage1Shop from '../../data/shop/stage1.json';
 import stage2Shop from '../../data/shop/stage2.json';
+import stage3Shop from '../../data/shop/stage3.json';
+import stage4Shop from '../../data/shop/stage4.json';
 
 export type Stat = 'STR' | 'DEF' | 'MAGIC' | 'SPD' | 'VIT';
 export type Slot = 'weapon' | 'armor' | 'accessory';
@@ -29,10 +31,12 @@ export class Progression {
     this.data = fresh();
     try {
       const value = JSON.parse(storage.getItem(KEY) || 'null') as Partial<SaveData> | null;
-      if (value && (value.stage === 1 || value.stage === 2)) {
+      if (value && [1, 2, 3, 4].includes(value.stage || 0)) {
         this.data = { ...fresh(), ...value, stats: { ...fresh().stats, ...value.stats },
           consumables: value.consumables || {}, checkpoints: value.checkpoints || {},
           ownedEquipment: value.ownedEquipment || [], equipped: value.equipped || {} };
+        // An older Phase 2 save kept stage=2 after its Boss was defeated.
+        this.data.stage = Math.min(4, Math.max(this.data.stage, this.data.cleared + 1));
       }
     } catch { /* Corrupt local data starts a new local run. */ }
   }
@@ -47,7 +51,8 @@ export class Progression {
   get speedBonus(): number { return this.data.stats.SPD * statsData.pointValuePerStat.SPD.moveSpeedPerPoint; }
 
   items(stage = this.data.stage): ShopItem[] {
-    return [...stage1Shop.items, ...(stage >= 2 ? stage2Shop.items : [])] as ShopItem[];
+    return [...stage1Shop.items, ...(stage >= 2 ? stage2Shop.items : []),
+      ...(stage >= 3 ? stage3Shop.items : []), ...(stage >= 4 ? stage4Shop.items : [])] as ShopItem[];
   }
   item(id: string): ShopItem | undefined { return this.items().find(x => x.id === id); }
 
@@ -103,7 +108,7 @@ export class Progression {
   clear(stage: number, level: number): void {
     this.data.cleared = Math.max(this.data.cleared, stage);
     this.data.level = level;
-    if (stage === 1) this.data.stage = 2;
+    if (stage < 4) this.data.stage = stage + 1;
     this.save();
   }
 

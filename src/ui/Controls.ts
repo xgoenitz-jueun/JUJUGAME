@@ -1,5 +1,6 @@
-export type Action = 'attack' | 'ki' | 'jump' | 'roll' | 'crouch';
+export type Action = 'attack' | 'ki' | 'jump' | 'roll' | 'crouch' | 'storm' | 'transform' | 'color' | 'shield' | 'meteor';
 import type { Progression } from '../systems/Progression';
+import type { Transformation } from '../state/Transformation';
 
 /** DOM overlay keeps each touch action independent of the game canvas. */
 export class Controls {
@@ -24,10 +25,12 @@ export class Controls {
         <div id="progress">第一關 · Lv3 · 金錢 0 · 點數 0</div>
         <div class="bar-label">HP <span id="hp-value"></span></div><div class="bar hp"><i id="hp-fill"></i></div>
         <div class="bar-label">MP <span id="mp-value"></span></div><div class="bar mp"><i id="mp-fill"></i></div>
+        <div class="bar-label">藍色風暴 <span id="storm-value">0%</span></div><div class="bar storm"><i id="storm-fill"></i></div>
+        <div class="bar-label">變身 <span id="form-value">0%</span></div><div class="bar form"><i id="form-fill"></i></div>
         <div id="status" role="status" aria-live="polite">移動靠近練習標靶，試試三段連擊</div>
         <a id="sprite-gallery" href="./sprites.html">檢視本次角色與技能圖片</a>
       </div>
-      <div id="hint">鍵盤：WASD／方向鍵移動 · J 攻擊（長按蓄力） · G 氣功 · K 跳 · L 翻滾 · C 蹲下</div>
+      <div id="hint">WASD 移動 · J 攻擊 · G 氣功 · B 風暴 · T 變身 · F 五色 · H 防禦 · M 流星雨</div>
       <button id="menu-toggle" aria-label="開關背包商店與配點選單" aria-expanded="false">背包／商店</button>
       <section id="menu-panel" aria-label="背包商店與配點" hidden></section>
       <div id="move-zone" aria-label="移動搖桿觸控區"><div id="joystick"><div id="stick"></div></div></div>
@@ -37,6 +40,11 @@ export class Controls {
         <button data-action="crouch" aria-label="蹲下">蹲下</button>
         <button data-action="ki" class="special" aria-label="按住氣功蓄力，放開發射">氣功</button>
         <button data-action="attack" class="attack" aria-label="點按拳腳連擊，長按蓄力氣功">攻擊</button>
+        <button data-action="storm" class="storm-action" aria-label="藍色風暴">風暴</button>
+        <button data-action="transform" class="transform-action" aria-label="變身">變身</button>
+        <button data-action="color" class="form-action color-action" aria-label="五色魔法">五色</button>
+        <button data-action="shield" class="form-action shield-action" aria-label="絕對防禦">防禦</button>
+        <button data-action="meteor" class="form-action meteor-action" aria-label="流星雨">流星</button>
       </div>`;
     game.appendChild(this.root);
     this.arena = this.root.querySelector('#move-zone') as HTMLDivElement;
@@ -121,8 +129,17 @@ export class Controls {
     (this.root.querySelector('#mp-value') as HTMLElement).textContent = `${Math.ceil(mp)} / ${maxMp}`;
   }
 
+  setSkills(storm: number, form: Transformation): void {
+    (this.root.querySelector('#storm-fill') as HTMLElement).style.width = `${storm}%`;
+    (this.root.querySelector('#storm-value') as HTMLElement).textContent = `${Math.floor(storm)}%`;
+    (this.root.querySelector('#form-fill') as HTMLElement).style.width = `${form.active ? form.activeLeft / 20 * 100 : form.cooldownLeft > 0 ? 0 : form.charge}%`;
+    (this.root.querySelector('#form-value') as HTMLElement).textContent = form.active ? `${Math.ceil(form.activeLeft)} 秒` :
+      form.cooldownLeft > 0 ? `冷卻 ${Math.ceil(form.cooldownLeft)} 秒` : `${Math.floor(form.charge)}%`;
+    this.root.classList.toggle('transformed', form.active);
+  }
+
   renderMenu(progress: Progression, stageName: string): void {
-    (this.root.querySelector('.hud-title') as HTMLElement).textContent = `Phase 2 · ${stageName}`;
+    (this.root.querySelector('.hud-title') as HTMLElement).textContent = `Phase 3 · ${stageName}`;
     (this.root.querySelector('#progress') as HTMLElement).textContent = `Lv${progress.data.level} · 金錢 ${progress.data.coins} · 可用點數 ${progress.unspent}`;
     const panel = this.root.querySelector('#menu-panel') as HTMLElement;
     const rows = progress.items().map(item => `<div class="menu-row"><span>${item.name} · ${item.price} 金</span><button data-menu="buy" data-id="${item.id}">購買</button></div>`).join('');

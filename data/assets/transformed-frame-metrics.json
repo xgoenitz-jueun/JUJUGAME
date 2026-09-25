@@ -1,0 +1,161 @@
+{
+  "idle": {
+    "frameWidth": 220,
+    "frameHeight": 270,
+    "frames": [
+      {
+        "height": 222,
+        "bottom": 10,
+        "center": 108.0
+      },
+      {
+        "height": 221,
+        "bottom": 10,
+        "center": 111.5
+      },
+      {
+        "height": 221,
+        "bottom": 10,
+        "center": 112.0
+      },
+      {
+        "height": 221,
+        "bottom": 11,
+        "center": 111.5
+      },
+      {
+        "height": 215,
+        "bottom": 25,
+        "center": 109.0
+      },
+      {
+        "height": 215,
+        "bottom": 25,
+        "center": 110.5
+      },
+      {
+        "height": 215,
+        "bottom": 25,
+        "center": 111.5
+      },
+      {
+        "height": 221,
+        "bottom": 18,
+        "center": 111.0
+      }
+    ]
+  },
+  "jump": {
+    "frameWidth": 260,
+    "frameHeight": 290,
+    "frames": [
+      {
+        "height": 225,
+        "bottom": 4,
+        "center": 130.0
+      },
+      {
+        "height": 185,
+        "bottom": 4,
+        "center": 130.0
+      },
+      {
+        "height": 238,
+        "bottom": 4,
+        "center": 129.5
+      },
+      {
+        "height": 221,
+        "bottom": 4,
+        "center": 129.5
+      },
+      {
+        "height": 186,
+        "bottom": 4,
+        "center": 130.0
+      },
+      {
+        "height": 236,
+        "bottom": 4,
+        "center": 130.0
+      },
+      {
+        "height": 157,
+        "bottom": 4,
+        "center": 129.5
+      }
+    ]
+  },
+  "crouch": {
+    "frameWidth": 260,
+    "frameHeight": 290,
+    "frames": [
+      {
+        "height": 200,
+        "bottom": 4,
+        "center": 130.0
+      },
+      {
+        "height": 189,
+        "bottom": 4,
+        "center": 130.0
+      },
+      {
+        "height": 167,
+        "bottom": 4,
+        "center": 129.5
+      },
+      {
+        "height": 162,
+        "bottom": 4,
+        "center": 130.0
+      },
+      {
+        "height": 199,
+        "bottom": 4,
+        "center": 130.0
+      }
+    ]
+  },
+  "roll": {
+    "frameWidth": 260,
+    "frameHeight": 290,
+    "frames": [
+      {
+        "height": 172,
+        "bottom": 4,
+        "center": 129.5
+      },
+      {
+        "height": 154,
+        "bottom": 4,
+        "center": 129.5
+      },
+      {
+        "height": 163,
+        "bottom": 4,
+        "center": 129.5
+      },
+      {
+        "height": 153,
+        "bottom": 4,
+        "center": 129.5
+      },
+      {
+        "height": 156,
+        "bottom": 4,
+        "center": 129.5
+      },
+      {
+        "height": 152,
+        "bottom": 4,
+        "center": 130.0
+      },
+      {
+        "height": 172,
+        "bottom": 4,
+        "center": 129.5
+      }
+    ]
+  }
+}

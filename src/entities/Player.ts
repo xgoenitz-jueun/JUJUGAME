@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { prototype } from '../config/prototype';
 import playerFrameMetrics from '../../data/assets/player-frame-metrics.json';
+import transformedFrameMetrics from '../../data/assets/transformed-frame-metrics.json';
 import type { PlayerSnapshot, Pose } from '../state/PlayerState';
 
 const ATTACK_SECONDS = 0.32;
@@ -29,6 +30,8 @@ export class Player {
   private crouchHeld = false;
   private rollDirection = 1;
   private hurtLeft = 0;
+  transformed = false;
+  protected = false;
   maxHp: number = prototype.hp;
   maxMp: number = prototype.mp;
   speedBonus = 0;
@@ -47,7 +50,7 @@ export class Player {
   get isCrouching(): boolean { return this.crouchHeld && this.snapshot.elevation === 0 && !this.isRolling; }
 
   receiveDamage(amount: number): number {
-    if (this.snapshot.invulnerable || this.hurtLeft > 0 || this.snapshot.hp <= 0) return 0;
+    if (this.snapshot.invulnerable || this.protected || this.hurtLeft > 0 || this.snapshot.hp <= 0) return 0;
     const taken = Math.max(1, Math.round(amount));
     this.snapshot.hp = Math.max(0, this.snapshot.hp - taken);
     this.hurtLeft = 0.7;
@@ -62,12 +65,27 @@ export class Player {
   }
 
   setMaximums(hp: number, mp: number, speedBonus: number): void {
+    hp *= this.transformed ? 2 : 1;
+    mp *= this.transformed ? 2 : 1;
     const oldHp = this.maxHp;
     this.maxHp = hp;
     this.maxMp = mp;
     this.speedBonus = speedBonus;
     this.snapshot.hp = Math.min(hp, this.snapshot.hp + Math.max(0, hp - oldHp));
     this.snapshot.mp = Math.min(mp, this.snapshot.mp);
+  }
+
+  setTransformed(value: boolean): void {
+    if (this.transformed === value) return;
+    const hpRatio = this.snapshot.hp / this.maxHp;
+    const mpRatio = this.snapshot.mp / this.maxMp;
+    this.transformed = value;
+    this.maxHp *= value ? 2 : .5;
+    this.maxMp *= value ? 2 : .5;
+    this.snapshot.hp = Math.min(this.maxHp, Math.max(1, Math.round(hpRatio * this.maxHp)));
+    this.snapshot.mp = Math.min(this.maxMp, Math.round(mpRatio * this.maxMp));
+    this.protected = false;
+    this.render();
   }
 
   revive(x: number, depthY: number): void {
@@ -94,7 +112,7 @@ export class Player {
 
   endAttack(kind: 'attack' | 'ki'): void {
     if (this.held !== kind) return;
-    const charging = kind === 'ki' || this.heldFor >= prototype.chargeThresholdSeconds;
+    const charging = kind === 'ki' || (!this.transformed && this.heldFor >= prototype.chargeThresholdSeconds);
     const power = this.snapshot.charge;
     this.held = null;
     this.snapshot.charge = 0;
@@ -138,7 +156,7 @@ export class Player {
     if (!this.comboLeft) this.comboStep = 0;
     if (this.held) {
       this.heldFor += dt;
-      if (this.held === 'ki' || this.heldFor >= prototype.chargeThresholdSeconds) {
+      if (this.held === 'ki' || (!this.transformed && this.heldFor >= prototype.chargeThresholdSeconds)) {
         s.charge = Math.min(1, this.heldFor / prototype.maxChargeSeconds);
       }
     }
@@ -150,8 +168,9 @@ export class Player {
     } else {
       s.invulnerable = false;
       const movementFactor = this.isCrouching ? 0.4 : 1;
-      s.x += dx * (prototype.walkSpeed + this.speedBonus) * movementFactor * dt;
-      s.depthY += dy * prototype.depthSpeed * movementFactor * dt;
+      const formFactor = this.transformed ? 2 : 1;
+      s.x += dx * (prototype.walkSpeed + this.speedBonus) * movementFactor * formFactor * dt;
+      s.depthY += dy * prototype.depthSpeed * movementFactor * formFactor * dt;
       if (dx !== 0) s.facing = dx > 0 ? 1 : -1;
     }
     s.x = Phaser.Math.Clamp(s.x, 40, Math.max(41, bounds.width - 40));
@@ -180,7 +199,9 @@ export class Player {
         s.pose === 'crouch' ? 'crouch' : s.pose === 'move' || s.pose === 'attack' ? 'move' : 'idle';
       const visualState = s.pose === 'attack' ? 'attack' : visual;
       if (this.lastVisual !== visualState) { this.visualClock = 0; this.lastVisual = visualState; }
-      const texture = `player_base_${visual}`;
+      const form = this.transformed ? 'player_transform' : 'player_base';
+      const formVisual = this.transformed && visual === 'move' ? 'idle' : visual;
+      const texture = `${form}_${formVisual}`;
       const lengths: Record<string, number> = { idle: 8, move: 8, jump: 7, crouch: 5, roll: 7 };
       const attackProgress = 1 - this.attackLeft / ATTACK_SECONDS;
       const frame = s.pose === 'attack' ? [0, 2, 4][Math.min(2, Math.floor(attackProgress * 3))] :
@@ -189,7 +210,7 @@ export class Player {
         visual === 'crouch' ? 2 : Math.floor(this.visualClock * (visual === 'move' ? 12 : 5)) % lengths[visual];
       if (this.sprite.texture.key !== texture || this.sprite.frame.name !== String(frame))
         this.sprite.setTexture(texture, frame);
-      const metrics = playerFrameMetrics[visual];
+      const metrics = this.transformed ? transformedFrameMetrics[formVisual as keyof typeof transformedFrameMetrics] : playerFrameMetrics[visual];
       const bounds = metrics.frames[frame];
       // Scale the visible figure, not the transparent cell. Keep both axes equal.
       // A crouch and a roll are intentionally shorter than a standing figure.
@@ -210,7 +231,8 @@ export class Player {
           kick ? 34 : 24, s.facing > 0 ? -1.15 : 2.0, s.facing > 0 ? 1.15 : 4.28)
           .strokePath().setPosition(s.x, s.depthY - s.elevation).setDepth(s.depthY + 2);
       }
-      if (s.pose === 'hurt') this.sprite.setTint(0xffb1c2);
+      if (this.protected) this.sprite.setTint(0xaaddff);
+      else if (s.pose === 'hurt') this.sprite.setTint(0xffb1c2);
       else this.sprite.clearTint();
       this.chargeVisual.setVisible(s.charge > 0);
       if (s.charge > 0) {

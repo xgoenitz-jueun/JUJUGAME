@@ -1,0 +1,1 @@
+{"id":"orc","displayName":"半獸人","type":"normal","stage":4,"hp":125,"speed":82,"color":8648846,"coinDrop":24,"skillPointDrop":1,"patterns":[{"id":"heavy","damage":20,"range":95,"cooldown":2.8,"windup":0.95,"kind":"melee"},{"id":"rush","damage":17,"range":215,"cooldown":4.3,"windup":0.9,"kind":"lunge"}],"spriteRef":"assets/sprites/orc.png"}

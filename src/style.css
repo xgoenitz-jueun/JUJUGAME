@@ -12,6 +12,8 @@ html, body, #game { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 .bar i { display: block; width: 100%; height: 100%; transition: width .13s; }
 .hp i { background: linear-gradient(90deg, #e34568, #ff8a8d); }
 .mp i { background: linear-gradient(90deg, #2784e8, #82d5ff); }
+.storm i { background: linear-gradient(90deg, #285de9, #8addff); }
+.form i { background: linear-gradient(90deg, #a666dd, #ffe1fa); }
 #status { font-size: 12px; line-height: 1.3; color: #e6ecff; }
 #sprite-gallery { pointer-events: auto; display: inline-block; margin-top: 5px; color: #b9e6ff; font-size: 11px; }
 #hint { position: absolute; top: calc(16px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); border-radius: 12px; padding: 8px 11px; max-width: 44vw; background: #0a1c38bb; color: #e6ecff; font-size: 12px; }
@@ -27,21 +29,32 @@ html, body, #game { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 #joystick { position: absolute; width: 114px; height: 114px; border-radius: 50%; border: 2px solid #ddf4ff88; background: #caedff33; transform: translate(-50%, -50%); opacity: 0; transition: opacity .1s; }
 #joystick.visible { opacity: 1; }
 #stick { position: absolute; left: 31px; top: 31px; width: 48px; height: 48px; border-radius: 50%; background: #fff9; border: 2px solid #fff; box-shadow: 0 0 15px #80ceff; }
-#action-zone { pointer-events: none; position: absolute; right: calc(12px + env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); width: min(310px, 52vw); height: 210px; }
+#action-zone { pointer-events: none; position: absolute; right: calc(12px + env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); width: min(330px, 54vw); height: 290px; }
 #action-zone button { pointer-events: auto; touch-action: none; position: absolute; border: 1.5px solid #eaf7ffab; color: white; font-size: 14px; font-weight: 700; border-radius: 50%; width: 72px; height: 72px; opacity: .50; background: #3656a6; box-shadow: 0 3px 12px #0a123988; transition: opacity .1s, transform .1s; }
 #action-zone button.pressed, #action-zone button:active { opacity: .86; transform: scale(.94); }
-[data-action=jump] { right: 79px; top: 0; }
-[data-action=roll] { right: 7px; top: 19px; }
-[data-action=crouch] { right: 150px; top: 50px; }
+[data-action=jump] { right: 79px; bottom: 151px; }
+[data-action=roll] { right: 7px; bottom: 133px; }
+[data-action=crouch] { right: 150px; bottom: 130px; }
 #action-zone button.special { right: 92px; bottom: 5px; background: #d247a0; }
 #action-zone button.attack { right: 0; bottom: 10px; width: 86px; height: 86px; background: #b74d76; }
+#action-zone button.storm-action { right: 245px; bottom: 90px; background: #337fcc; }
+#action-zone button.transform-action { right: 185px; bottom: 7px; background: #955fc4; }
+#action-zone button.form-action { display: none; background: #955fc4; }
+#overlay.transformed #action-zone button.storm-action,
+#overlay.transformed #action-zone button.transform-action,
+#overlay.transformed #action-zone button.special { display: none; }
+#overlay.transformed #action-zone button.form-action { display: block; }
+#overlay.transformed #action-zone button.color-action { right: 205px; bottom: 95px; }
+#overlay.transformed #action-zone button.shield-action { right: 187px; bottom: 5px; }
+#overlay.transformed #action-zone button.meteor-action { right: 245px; bottom: 178px; }
+#overlay.transformed #action-zone button.attack { background: #884abc; }
 @media (orientation: portrait) {
   #hud { max-width: 75vw; }
   #hint { top: calc(130px + env(safe-area-inset-top)); right: 12px; max-width: 70vw; font-size: 11px; }
   #menu-toggle { top: calc(190px + env(safe-area-inset-top)); }
   #menu-panel { top: calc(235px + env(safe-area-inset-top)); max-height: 43vh; max-height: 43dvh; }
   #move-zone { height: 35%; width: 45%; }
-  #action-zone { transform: scale(.8); transform-origin: right bottom; width: 300px; }
+  #action-zone { transform: scale(.8); transform-origin: right bottom; width: 330px; }
 }
 @media (max-height: 440px) {
   #action-zone { transform: scale(.72); transform-origin: right bottom; }

@@ -38,6 +38,13 @@ test('金錢、購物、背包、裝備與素質加成跨關保存', () => {
   assert.equal(restored.items().some(item => item.id === 'forest_weapon'), true);
   restored.clear(2, 6);
   assert.equal(restored.data.level, 6);
+  const stage3 = new Progression(store);
+  assert.equal(stage3.data.stage, 3);
+  assert.equal(stage3.items().some(item => item.id === 'spirit_weapon'), true);
+  stage3.clear(3, 8);
+  const stage4 = new Progression(store);
+  assert.equal(stage4.data.stage, 4);
+  assert.equal(stage4.items().some(item => item.id === 'wasteland_armor'), true);
 });
 
 test('技能點上限 50，不能重複買裝備或超額配點', () => {

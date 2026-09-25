@@ -1,0 +1,7 @@
+{
+  "red": { "name": "燒傷", "duration": 4, "damagePerTick": 6, "tickSeconds": 1 },
+  "blue": { "name": "冰凍", "duration": 1.4 },
+  "yellow": { "name": "麻痺", "duration": 2, "moveMultiplier": 0.5 },
+  "green": { "name": "中毒", "duration": 5, "damagePerTick": 4, "tickSeconds": 1 },
+  "purple": { "name": "暈眩", "duration": 1.2 }
+}
