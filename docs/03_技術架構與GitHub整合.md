@@ -93,6 +93,7 @@
 |---|---|
 | 主角待機／移動 | `assets/sprites/player_base_idle.png`、`assets/sprites/player_base_move.png` |
 | 主角跳躍／蹲下／翻滾 | `assets/sprites/player_base_jump.png`、`assets/sprites/player_base_crouch.png`、`assets/sprites/player_base_roll.png` |
+| 主角普通攻擊 | 目前未提供獨立拳／踢圖幀；試玩版由 `assets/sprites/player_base_move.png` 的動作幀與程式位移／傾斜／揮擊軌跡組合呈現三段連擊 |
 | 粉紅氣功蓄力／瞬發光束 | `assets/sprites/player_ki_charge.png`、`assets/sprites/player_ki_beam.png` |
 | 藍色風暴前／右／後／左（同時使用） | `assets/sprites/blue_storm_front.png`、`assets/sprites/blue_storm_right.png`、`assets/sprites/blue_storm_back.png`、`assets/sprites/blue_storm_left.png` |
 | 全屏閃電藍／金 | `assets/sprites/super_lightning_blue.png`、`assets/sprites/super_lightning_gold.png` |
@@ -107,6 +108,8 @@
 | 隱藏 Boss 第一／第二形態及火焰 | `assets/sprites/final_boss_baseball.png`、`assets/sprites/final_boss_demon.png`、`assets/sprites/final_boss_dark_flame.png` |
 
 `player_base_sheet.png` 與 `player_transform_sheet.png` 保存原始透明待機圖，方便重切；`player_base_actions_reference.png` 與 `player_transform_actions_reference.png` 保存附編號動作展示板。藍色風暴的前後左右是固定分配，四張圖**同時出現**，不得按 (1)→(4) 輪播。
+
+第一、二關遊戲畫面的四種怪物由 `data/enemies/{slime,goblin,wolf,tiger}.json` 的 `spriteRef` 載入，主角由 `BootScene.preload` 載入上表的五組 `player_base_*` 動作圖；其他圖片雖已收進 41 張資源清單，但較後面的關卡仍未製作。`data/assets/player-frame-metrics.json` 記錄每幀人物實際可見高度、畫布底邊留白與水平中心；顯示時依此採同一人物身高和腳底錨點，蹲下與翻滾則保留合理的低姿勢高度。重新執行 `scripts/prepare-sprites.py` 時會同步重算這份數據。
 
 ## 3. 玩家狀態機（State Machine）
 

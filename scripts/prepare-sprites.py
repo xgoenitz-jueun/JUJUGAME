@@ -217,4 +217,23 @@ manifest.update({f'player_transform_{pose}': f'assets/sprites/player_transform_{
 (DEST.parent.parent.parent / 'data/assets/sprites.json').parent.mkdir(parents=True, exist_ok=True)
 (DEST.parent.parent.parent / 'data/assets/sprites.json').write_text(
     json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+# Gameplay draws from fixed-size sheet cells. Store the visible figure bounds so
+# transparent padding in different source poses cannot change apparent height.
+metrics = {}
+for pose, count, width, height in (('idle', 8, 220, 270), ('move', 8, 220, 270),
+                                   ('jump', 7, 260, 290), ('crouch', 5, 260, 290),
+                                   ('roll', 7, 260, 290)):
+    with Image.open(DEST / f'player_base_{pose}.png') as sheet:
+        alpha = sheet.convert('RGBA').getchannel('A')
+        frames = []
+        for index in range(count):
+            frame = alpha.crop((index * width, 0, (index + 1) * width, height))
+            bounds = frame.point(lambda a: 255 if a > 40 else 0).getbbox()
+            assert bounds, f'Empty {pose} frame {index}'
+            frames.append({'height': bounds[3] - bounds[1],
+                           'bottom': height - bounds[3],
+                           'center': (bounds[0] + bounds[2]) / 2})
+        metrics[pose] = {'frameWidth': width, 'frameHeight': height, 'frames': frames}
+(DEST.parent.parent.parent / 'data/assets/player-frame-metrics.json').write_text(
+    json.dumps(metrics, ensure_ascii=False, indent=2) + '\n')
 print(f'Prepared {len(NAMES)} named uploads and 9 action strips in {DEST}')

@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { prototype } from '../config/prototype';
+import playerFrameMetrics from '../../data/assets/player-frame-metrics.json';
 import type { PlayerSnapshot, Pose } from '../state/PlayerState';
+
+const ATTACK_SECONDS = 0.32;
 
 type Hooks = {
   onMelee: (step: number) => void;
@@ -13,6 +16,7 @@ export class Player {
   private readonly shadow: Phaser.GameObjects.Graphics;
   private readonly sprite: Phaser.GameObjects.Sprite;
   private readonly chargeVisual: Phaser.GameObjects.Image;
+  private readonly attackTrail: Phaser.GameObjects.Graphics;
   private visualClock = 0;
   private lastVisual = '';
   private velocityZ = 0;
@@ -35,6 +39,7 @@ export class Player {
     this.body = scene.add.graphics();
     this.sprite = scene.add.sprite(x, depthY, 'player_base_idle', 0).setOrigin(0.5, 1);
     this.chargeVisual = scene.add.image(x, depthY, 'player_ki_charge').setVisible(false);
+    this.attackTrail = scene.add.graphics();
     this.render();
   }
 
@@ -104,7 +109,7 @@ export class Player {
     if (this.isRolling) return;
     this.comboStep = this.comboLeft > 0 ? (this.comboStep % 3) + 1 : 1;
     this.comboLeft = prototype.comboWindowSeconds;
-    this.attackLeft = 0.19;
+    this.attackLeft = ATTACK_SECONDS;
     this.hooks.onMelee(this.comboStep);
   }
 
@@ -168,21 +173,43 @@ export class Player {
     this.shadow.setPosition(s.x, s.depthY + 2).setDepth(s.depthY);
     const g = this.body;
     g.clear();
+    this.attackTrail.clear();
     if (this.scene.textures.exists('player_base_idle')) {
       g.setVisible(false);
-      const visual = s.pose === 'jump' ? 'jump' : s.pose === 'roll' ? 'roll' :
-        s.pose === 'crouch' ? 'crouch' : s.pose === 'move' ? 'move' : 'idle';
-      if (this.lastVisual !== visual) { this.visualClock = 0; this.lastVisual = visual; }
+      const visual: keyof typeof playerFrameMetrics = s.pose === 'jump' ? 'jump' : s.pose === 'roll' ? 'roll' :
+        s.pose === 'crouch' ? 'crouch' : s.pose === 'move' || s.pose === 'attack' ? 'move' : 'idle';
+      const visualState = s.pose === 'attack' ? 'attack' : visual;
+      if (this.lastVisual !== visualState) { this.visualClock = 0; this.lastVisual = visualState; }
       const texture = `player_base_${visual}`;
       const lengths: Record<string, number> = { idle: 8, move: 8, jump: 7, crouch: 5, roll: 7 };
-      const frame = visual === 'jump' ? Math.min(6, Math.floor(this.visualClock * 9)) :
+      const attackProgress = 1 - this.attackLeft / ATTACK_SECONDS;
+      const frame = s.pose === 'attack' ? [0, 2, 4][Math.min(2, Math.floor(attackProgress * 3))] :
+        visual === 'jump' ? Math.min(6, Math.floor(this.visualClock * 9)) :
         visual === 'roll' ? Math.min(6, Math.floor((1 - this.rollLeft / prototype.rollSeconds) * 7)) :
         visual === 'crouch' ? 2 : Math.floor(this.visualClock * (visual === 'move' ? 12 : 5)) % lengths[visual];
       if (this.sprite.texture.key !== texture || this.sprite.frame.name !== String(frame))
         this.sprite.setTexture(texture, frame);
-      this.sprite.setDisplaySize(visual === 'roll' ? 93 : 85, visual === 'crouch' ? 89 : 108)
-        .setPosition(s.x, s.depthY - s.elevation).setDepth(s.depthY + 1)
-        .setFlipX(s.facing < 0);
+      const metrics = playerFrameMetrics[visual];
+      const bounds = metrics.frames[frame];
+      // Scale the visible figure, not the transparent cell. Keep both axes equal.
+      // A crouch and a roll are intentionally shorter than a standing figure.
+      const targetHeight = visual === 'crouch' ? 76 : visual === 'roll' ? 78 : 108;
+      const scale = targetHeight / bounds.height;
+      const striking = s.pose === 'attack';
+      const lunge = striking ? Math.sin(attackProgress * Math.PI) * (this.comboStep === 3 ? 19 : 13) : 0;
+      const angle = striking ? -s.facing * Math.sin(attackProgress * Math.PI) * (this.comboStep === 3 ? 22 : 14) : 0;
+      this.sprite.setScale(scale)
+        .setPosition(s.x + s.facing * lunge + (metrics.frameWidth / 2 - bounds.center) * scale,
+          s.depthY - s.elevation + bounds.bottom * scale)
+        .setDepth(s.depthY + 1).setFlipX(s.facing < 0).setAngle(angle);
+      if (striking) {
+        const kick = this.comboStep === 3;
+        this.attackTrail.lineStyle(kick ? 8 : 6, kick ? 0xffd68b : 0xffe1f1,
+          Math.max(0, Math.sin(attackProgress * Math.PI)) * .85);
+        this.attackTrail.beginPath().arc(s.facing * (kick ? 47 : 37), kick ? -35 : -59,
+          kick ? 34 : 24, s.facing > 0 ? -1.15 : 2.0, s.facing > 0 ? 1.15 : 4.28)
+          .strokePath().setPosition(s.x, s.depthY - s.elevation).setDepth(s.depthY + 2);
+      }
       if (s.pose === 'hurt') this.sprite.setTint(0xffb1c2);
       else this.sprite.clearTint();
       this.chargeVisual.setVisible(s.charge > 0);
@@ -214,5 +241,5 @@ export class Player {
     g.setPosition(s.x, s.depthY - s.elevation).setDepth(s.depthY + 1);
   }
 
-  destroy(): void { this.shadow.destroy(); this.body.destroy(); this.sprite.destroy(); this.chargeVisual.destroy(); }
+  destroy(): void { this.shadow.destroy(); this.body.destroy(); this.sprite.destroy(); this.chargeVisual.destroy(); this.attackTrail.destroy(); }
 }
