@@ -16,6 +16,7 @@ export const ENEMIES: Record<string, EnemyConfig> = { slime, goblin, wolf, tiger
 
 export class Enemy {
   readonly graphics: Phaser.GameObjects.Graphics;
+  readonly sprite: Phaser.GameObjects.Image;
   readonly label: Phaser.GameObjects.Text;
   readonly maxHp: number;
   hp: number;
@@ -28,6 +29,7 @@ export class Enemy {
   private nextPattern = 0;
   private selected: Pattern | null = null;
   private flash = 0;
+  private faceRight = false;
 
   constructor(private scene: Phaser.Scene, readonly config: EnemyConfig, x: number, depthY: number,
     private attack: (enemy: Enemy, pattern: Pattern) => void) {
@@ -36,6 +38,7 @@ export class Enemy {
     this.maxHp = config.hp;
     this.hp = config.hp;
     this.graphics = scene.add.graphics();
+    this.sprite = scene.add.image(x, depthY, config.id).setOrigin(0.5, 1);
     this.label = scene.add.text(x, depthY - 82, config.displayName, { fontFamily: 'sans-serif', fontSize: '13px', color: '#fff' }).setOrigin(0.5);
     this.render();
   }
@@ -45,6 +48,7 @@ export class Enemy {
 
   update(dt: number, player: PlayerSnapshot): void {
     if (!this.alive || Math.abs(this.x - player.x) > 650) return;
+    this.faceRight = player.x > this.x;
     this.flash = Math.max(0, this.flash - dt);
     this.buffLeft = Math.max(0, this.buffLeft - dt);
     const speedMultiplier = this.enraged ? 1.35 : 1;
@@ -88,6 +92,7 @@ export class Enemy {
     if (!this.hp) {
       this.alive = false;
       this.graphics.setVisible(false);
+      this.sprite.setVisible(false);
       this.label.setVisible(false);
       return true;
     }
@@ -101,7 +106,13 @@ export class Enemy {
     g.clear().setDepth(this.depthY + 1);
     const bodyColor = this.flash > 0 ? 0xffffff : this.config.color;
     g.fillStyle(0x142234, .25).fillEllipse(this.x, this.depthY, this.boss ? 78 : 57, 15);
-    if (this.config.id === 'slime') {
+    if (this.scene.textures.exists(this.config.id)) {
+      this.sprite.setPosition(this.x, this.depthY).setDepth(this.depthY + 1)
+        .setDisplaySize(this.boss ? 115 : 82, this.boss ? 115 : 78)
+        .setFlipX(this.faceRight);
+      if (this.flash > 0) this.sprite.setTint(0xffffff);
+      else this.sprite.clearTint();
+    } else if (this.config.id === 'slime') {
       g.fillStyle(bodyColor).fillEllipse(this.x, this.depthY - 24, 51, 43);
       g.fillStyle(0xffffff).fillCircle(this.x - 10, this.depthY - 30, 4).fillCircle(this.x + 10, this.depthY - 30, 4);
     } else if (this.config.id === 'wolf' || this.config.id === 'tiger') {
@@ -123,5 +134,5 @@ export class Enemy {
     this.label.setPosition(this.x, this.depthY - 105).setDepth(this.depthY + 2);
   }
 
-  destroy(): void { this.graphics.destroy(); this.label.destroy(); }
+  destroy(): void { this.graphics.destroy(); this.sprite.destroy(); this.label.destroy(); }
 }

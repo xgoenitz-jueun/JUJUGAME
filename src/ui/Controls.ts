@@ -25,6 +25,7 @@ export class Controls {
         <div class="bar-label">HP <span id="hp-value"></span></div><div class="bar hp"><i id="hp-fill"></i></div>
         <div class="bar-label">MP <span id="mp-value"></span></div><div class="bar mp"><i id="mp-fill"></i></div>
         <div id="status" role="status" aria-live="polite">移動靠近練習標靶，試試三段連擊</div>
+        <a id="sprite-gallery" href="./sprites.html">檢視本次角色與技能圖片</a>
       </div>
       <div id="hint">鍵盤：WASD／方向鍵移動 · J 攻擊（長按蓄力） · G 氣功 · K 跳 · L 翻滾 · C 蹲下</div>
       <button id="menu-toggle" aria-label="開關背包商店與配點選單" aria-expanded="false">背包／商店</button>

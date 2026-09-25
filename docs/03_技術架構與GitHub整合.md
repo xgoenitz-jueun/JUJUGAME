@@ -35,7 +35,7 @@
     "coins": [10, 30],
     "skillPoints": { "chance": 1.0, "amount": 2 }
   },
-  "spriteRef": "PENDING_UPLOAD"
+  "spriteRef": "assets/sprites/goblin_boss.png"
 }
 ```
 
@@ -85,13 +85,36 @@
 }
 ```
 
+## 2.5 已確認美術資源與 `spriteRef` 對照
+
+`data/assets/sprites.json` 是完整資源對照表；網頁載入的路徑以 `assets/sprites/` 為根目錄。前兩關的 `data/enemies/*.json` 已將 `spriteRef` 實際更新為下表路徑；其餘項目供後續階段接入，不代表相關關卡或技能已實作。原始動作展示板保留為 `*_actions_reference.png`。變身動作逐格從黑底展示板去背切出；原形展示板的說明底圖與角色像素混合，試玩版的透明跳躍／蹲下／翻滾幀由同一張已確認原形透明圖衍生，姿態節奏依展示板編號安排。正式逐格精修仍以原始展示板為準。
+
+| 用途 | spriteRef |
+|---|---|
+| 主角待機／移動 | `assets/sprites/player_base_idle.png`、`assets/sprites/player_base_move.png` |
+| 主角跳躍／蹲下／翻滾 | `assets/sprites/player_base_jump.png`、`assets/sprites/player_base_crouch.png`、`assets/sprites/player_base_roll.png` |
+| 粉紅氣功蓄力／瞬發光束 | `assets/sprites/player_ki_charge.png`、`assets/sprites/player_ki_beam.png` |
+| 藍色風暴前／右／後／左（同時使用） | `assets/sprites/blue_storm_front.png`、`assets/sprites/blue_storm_right.png`、`assets/sprites/blue_storm_back.png`、`assets/sprites/blue_storm_left.png` |
+| 全屏閃電藍／金 | `assets/sprites/super_lightning_blue.png`、`assets/sprites/super_lightning_gold.png` |
+| 變身待機／跳躍／蹲下／翻滾 | `assets/sprites/player_transform_idle.png`、`assets/sprites/player_transform_jump.png`、`assets/sprites/player_transform_crouch.png`、`assets/sprites/player_transform_roll.png` |
+| 變身五色魔法／絕對防禦／流星雨 | `assets/sprites/transform_five_color_magic.png`、`assets/sprites/transform_absolute_defense.png`、`assets/sprites/transform_meteor_rain.png` |
+| 史萊姆／哥布林 | `assets/sprites/slime.png`、`assets/sprites/goblin_boss.png` |
+| 小野狼／小老虎 | `assets/sprites/wolf.png`、`assets/sprites/tiger_boss.png` |
+| 小幽靈／小殭屍 | `assets/sprites/ghost.png`、`assets/sprites/zombie_boss.png` |
+| 半獸人／獨眼巨人 | `assets/sprites/orc.png`、`assets/sprites/cyclops_boss.png` |
+| 第五關紅龍 | `assets/sprites/red_dragon_boss.png` |
+| 隱藏關紅／藍／金／紫／綠飛龍 | `assets/sprites/wyvern_red.png`、`assets/sprites/wyvern_blue.png`、`assets/sprites/wyvern_gold.png`、`assets/sprites/wyvern_purple.png`、`assets/sprites/wyvern_green.png` |
+| 隱藏 Boss 第一／第二形態及火焰 | `assets/sprites/final_boss_baseball.png`、`assets/sprites/final_boss_demon.png`、`assets/sprites/final_boss_dark_flame.png` |
+
+`player_base_sheet.png` 與 `player_transform_sheet.png` 保存原始透明待機圖，方便重切；`player_base_actions_reference.png` 與 `player_transform_actions_reference.png` 保存附編號動作展示板。藍色風暴的前後左右是固定分配，四張圖**同時出現**，不得按 (1)→(4) 輪播。
+
 ## 3. 玩家狀態機（State Machine）
 
 ```
 Idle → Move → Jump / Crouch / Roll
 Idle/Move → Attack(Combo1→2→3) → Idle
-Idle/Move → ChargeKi(蓄力) → ReleaseKi(飛行放大) → Idle
-Idle/Move → BlueStorm(範圍必殺) → Idle
+Idle/Move → ChargeKi(蓄力) → ReleaseKi(光束瞬間命中) → Idle
+Idle/Move → BlueStorm(前後左右四張龍捲風同時擴散) → Idle
 Idle/Move → SuperLightning(全屏必殺) → Idle
 Idle/Move → Transform(進入變身狀態機，數值×2、技能表替換) → (20s倒數) → RevertToBase
 Any(受擊) → Hurt → Idle / Dead(觸發傳送點復活流程)

@@ -37,6 +37,19 @@ export class BootScene extends Phaser.Scene {
 
   constructor() { super('Boot'); }
 
+  preload(): void {
+    const url = (name: string) => `${import.meta.env.BASE_URL}assets/sprites/${name}.png`;
+    for (const name of ['player_base_idle', 'player_base_move', 'player_base_jump',
+      'player_base_crouch', 'player_base_roll']) {
+      this.load.spritesheet(name, url(name), {
+        frameWidth: name.endsWith('idle') || name.endsWith('move') ? 220 : 260,
+        frameHeight: name.endsWith('idle') || name.endsWith('move') ? 270 : 290
+      });
+    }
+    for (const name of ['player_ki_charge', 'player_ki_beam']) this.load.image(name, url(name));
+    for (const config of Object.values(ENEMIES)) this.load.image(config.id, `${import.meta.env.BASE_URL}${config.spriteRef}`);
+  }
+
   create(): void {
     this.progress = new Progression(window.localStorage);
     this.level = LEVELS[this.progress.data.stage];
@@ -45,10 +58,7 @@ export class BootScene extends Phaser.Scene {
     const checkpoint = this.progress.data.checkpoints[String(this.level.number)];
     this.player = new Player(this, checkpoint ? checkpoint.position + 18 : 120, this.scale.height * .59, {
       onMelee: step => this.melee(step),
-      onKi: (x, y, elevation, direction, power) => this.spawnShot({
-        x: x + direction * 38, y, elevation, direction, damage: Math.round(20 + power * 12 + this.progress.magicBonus),
-        slow: 0, owner: 'player', power
-      })
+      onKi: (x, y, elevation, direction, power) => this.fireBeam(x, y, elevation, direction, power)
     });
     this.ui = new Controls((action, pressed) => this.action(action, pressed),
       (command, id) => this.menuAction(command, id));
@@ -243,6 +253,21 @@ export class BootScene extends Phaser.Scene {
 
   private spawnShot(shot: Omit<Shot, 'life' | 'graphic'>): void {
     this.shots.push({ ...shot, life: 0, graphic: this.add.graphics() });
+  }
+
+  /** The beam is instantaneous: hit detection happens when charge is released. */
+  private fireBeam(x: number, y: number, elevation: number, direction: number, power: number): void {
+    const length = Math.min(600, this.scale.width * .82);
+    const beam = this.add.image(x + direction * 30, y - elevation - 55, 'player_ki_beam')
+      .setOrigin(direction > 0 ? 0 : 1, .5).setFlipX(direction < 0)
+      .setDisplaySize(length, 90 + power * 28).setDepth(y + 4);
+    const damage = Math.round(20 + power * 12 + this.progress.magicBonus);
+    for (const enemy of this.enemies) {
+      if (!enemy.alive) continue;
+      const distance = (enemy.x - x) * direction;
+      if (distance >= 0 && distance <= length && Math.abs(enemy.depthY - y) < 54) this.hitEnemy(enemy, damage);
+    }
+    this.tweens.add({ targets: beam, alpha: 0, duration: 230, onComplete: () => beam.destroy() });
   }
 
   private updateShots(dt: number): void {

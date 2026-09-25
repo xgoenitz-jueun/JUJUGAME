@@ -11,6 +11,10 @@ export class Player {
   readonly snapshot: PlayerSnapshot;
   private readonly body: Phaser.GameObjects.Graphics;
   private readonly shadow: Phaser.GameObjects.Graphics;
+  private readonly sprite: Phaser.GameObjects.Sprite;
+  private readonly chargeVisual: Phaser.GameObjects.Image;
+  private visualClock = 0;
+  private lastVisual = '';
   private velocityZ = 0;
   private rollLeft = 0;
   private attackLeft = 0;
@@ -29,6 +33,8 @@ export class Player {
     this.snapshot = { x, depthY, elevation: 0, facing: 1, pose: 'idle', hp: prototype.hp, mp: prototype.mp, invulnerable: false, charge: 0 };
     this.shadow = scene.add.graphics();
     this.body = scene.add.graphics();
+    this.sprite = scene.add.sprite(x, depthY, 'player_base_idle', 0).setOrigin(0.5, 1);
+    this.chargeVisual = scene.add.image(x, depthY, 'player_ki_charge').setVisible(false);
     this.render();
   }
 
@@ -119,6 +125,7 @@ export class Player {
 
   update(dt: number, dx: number, dy: number, bounds: { width: number; near: number; far: number }): void {
     const s = this.snapshot;
+    this.visualClock += dt;
     this.rollLeft = Math.max(0, this.rollLeft - dt);
     this.hurtLeft = Math.max(0, this.hurtLeft - dt);
     this.attackLeft = Math.max(0, this.attackLeft - dt);
@@ -161,6 +168,31 @@ export class Player {
     this.shadow.setPosition(s.x, s.depthY + 2).setDepth(s.depthY);
     const g = this.body;
     g.clear();
+    if (this.scene.textures.exists('player_base_idle')) {
+      g.setVisible(false);
+      const visual = s.pose === 'jump' ? 'jump' : s.pose === 'roll' ? 'roll' :
+        s.pose === 'crouch' ? 'crouch' : s.pose === 'move' ? 'move' : 'idle';
+      if (this.lastVisual !== visual) { this.visualClock = 0; this.lastVisual = visual; }
+      const texture = `player_base_${visual}`;
+      const lengths: Record<string, number> = { idle: 8, move: 8, jump: 7, crouch: 5, roll: 7 };
+      const frame = visual === 'jump' ? Math.min(6, Math.floor(this.visualClock * 9)) :
+        visual === 'roll' ? Math.min(6, Math.floor((1 - this.rollLeft / prototype.rollSeconds) * 7)) :
+        visual === 'crouch' ? 2 : Math.floor(this.visualClock * (visual === 'move' ? 12 : 5)) % lengths[visual];
+      if (this.sprite.texture.key !== texture || this.sprite.frame.name !== String(frame))
+        this.sprite.setTexture(texture, frame);
+      this.sprite.setDisplaySize(visual === 'roll' ? 93 : 85, visual === 'crouch' ? 89 : 108)
+        .setPosition(s.x, s.depthY - s.elevation).setDepth(s.depthY + 1)
+        .setFlipX(s.facing < 0);
+      if (s.pose === 'hurt') this.sprite.setTint(0xffb1c2);
+      else this.sprite.clearTint();
+      this.chargeVisual.setVisible(s.charge > 0);
+      if (s.charge > 0) {
+        const diameter = 25 + s.charge * 59;
+        this.chargeVisual.setPosition(s.x + s.facing * 32, s.depthY - s.elevation - 59)
+          .setDisplaySize(diameter, diameter).setDepth(s.depthY + 3).setAlpha(.75 + s.charge * .25);
+      }
+      return;
+    }
     const crouch = s.pose === 'crouch' || s.pose === 'roll';
     const h = crouch ? 56 : 78;
     const bottom = 0;
@@ -182,5 +214,5 @@ export class Player {
     g.setPosition(s.x, s.depthY - s.elevation).setDepth(s.depthY + 1);
   }
 
-  destroy(): void { this.shadow.destroy(); this.body.destroy(); }
+  destroy(): void { this.shadow.destroy(); this.body.destroy(); this.sprite.destroy(); this.chargeVisual.destroy(); }
 }
