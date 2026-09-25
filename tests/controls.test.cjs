@@ -7,14 +7,15 @@ const ts = require('typescript');
 class Element {
   constructor(id = '') {
     this.id = id;
-    this.style = {};
+    this.style = { setProperty(name, value) { this[name] = value; } };
     this.dataset = {};
     this.listeners = new Map();
     this.classes = new Set();
     this.classList = {
       add: name => this.classes.add(name),
       remove: name => this.classes.delete(name),
-      contains: name => this.classes.has(name)
+      contains: name => this.classes.has(name),
+      toggle: (name, enabled) => enabled ? this.classes.add(name) : this.classes.delete(name)
     };
   }
   set innerHTML(html) {
@@ -32,9 +33,18 @@ class Element {
     });
   }
   get innerHTML() { return this._innerHTML; }
-  querySelector(selector) { return selector.startsWith('#') ? this.elements.get(selector.slice(1)) : this.classesByName.get(selector.slice(1)); }
+  querySelector(selector) {
+    if (selector === '.tutorial-focus') return [...this.elements.values(), ...this.buttons].find(element => element.classList.contains('tutorial-focus'));
+    if (selector.includes('[data-action=')) {
+      const name = selector.match(/data-action="([^"]+)"/)?.[1];
+      return this.buttons.find(button => button.dataset.action === name) || this.elements.get(selector.match(/#([\w-]+)/)?.[1]);
+    }
+    return selector.startsWith('#') ? this.elements.get(selector.slice(1)) : this.classesByName.get(selector.slice(1));
+  }
   querySelectorAll() { return this.buttons; }
   appendChild(child) { this.child = child; }
+  replaceChildren(...children) { this.children = children; }
+  focus() { this.focused = true; }
   remove() { this.removed = true; }
   addEventListener(name, handler) {
     const list = this.listeners.get(name) || [];
@@ -50,21 +60,24 @@ class Element {
   dispatch(name, properties = {}) {
     const event = { pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, ...properties };
     for (const handler of this.listeners.get(name) || []) handler(event);
+    if (name === 'click') this.onclick?.(event);
   }
 }
 
-function setup() {
+function setup(storage = new Map()) {
   const game = new Element('game');
   const module = { exports: {} };
   const source = fs.readFileSync('src/ui/Controls.ts', 'utf8');
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
-  vm.runInNewContext(compiled.outputText, { exports: module.exports, document: {
+  vm.runInNewContext(compiled.outputText, { exports: module.exports, window: { localStorage: {
+    getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value)
+  } }, document: {
     createElement: () => new Element(),
     querySelector: selector => selector === '#game' ? game : null
   }});
   const events = [];
   const controls = new module.exports.Controls((action, pressed) => events.push([action, pressed]));
-  return { controls, game, events, root: game.child };
+  return { controls, game, events, root: game.child, storage };
 }
 
 test('一般與變身技能按鈕都有獨立觸控按下、放開與取消事件', () => {
@@ -166,4 +179,43 @@ test('手機 viewport 與動態可視高度、四邊安全區皆有設定', () =
   for (const side of ['top', 'left', 'right', 'bottom']) {
     assert.match(css, new RegExp(`env\\(safe-area-inset-${side}\\)`));
   }
+});
+
+test('情境提示按事件排隊，標示按鍵，重開頁面後不重複', () => {
+  const { controls, root, storage } = setup();
+  controls.showTutorial('move', '上下左右移動', 'move-zone');
+  controls.showTutorial('attack', '遇到史萊姆請攻擊', 'attack');
+  controls.showTutorial('attack', '不應重複', 'attack');
+  assert.equal(root.querySelector('#tutorial-message').textContent, '上下左右移動');
+  assert.equal(root.querySelector('#move-zone').classList.contains('tutorial-focus'), true);
+  root.querySelector('#tutorial-dismiss').dispatch('click');
+  assert.equal(root.querySelector('#tutorial-message').textContent, '遇到史萊姆請攻擊');
+  assert.equal(root.buttons.find(button => button.dataset.action === 'attack').classList.contains('tutorial-focus'), true);
+  root.querySelector('#tutorial-dismiss').dispatch('click');
+  assert.equal(root.querySelector('#tutorial').hidden, true);
+  assert.deepEqual(JSON.parse(storage.get('juju-game-tutorial-v1')), ['move', 'attack']);
+  controls.destroy();
+  const next = setup(storage);
+  next.controls.showTutorial('move', '重複提示');
+  assert.equal(next.root.querySelector('#tutorial').hidden, undefined);
+  next.controls.destroy();
+});
+
+test('主線和隱藏關各有獎盃、藍色彩帶與繼續按鈕', () => {
+  const { controls, root } = setup();
+  const dialog = root.querySelector('#victory');
+  const ribbon = root.querySelector('.victory-confetti');
+  let stage = 0;
+  controls.showVictory(5, () => { stage = 6; });
+  assert.equal(dialog.hidden, false);
+  assert.match(root.innerHTML, /富邦悍將總冠軍/);
+  assert.equal(ribbon.children.length, 28);
+  assert.equal(root.querySelector('#victory-next').textContent, '挑戰隱藏第六關');
+  root.querySelector('#victory-next').dispatch('click');
+  assert.equal(stage, 6);
+  assert.equal(dialog.hidden, true);
+  controls.showVictory(6, () => { stage = 7; });
+  assert.equal(root.querySelector('#victory-subtitle').textContent, '隱藏關 · 真結局');
+  assert.equal(root.querySelector('#victory-next').textContent, '再次挑戰隱藏關');
+  controls.destroy();
 });

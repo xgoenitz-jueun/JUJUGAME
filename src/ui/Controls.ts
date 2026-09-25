@@ -13,6 +13,9 @@ export class Controls {
   private centerY = 0;
   readonly axes = { x: 0, y: 0 };
   private readonly pressed = new Set<Action>();
+  private readonly tutorialSeen = new Set<string>();
+  private readonly tutorialQueue: { id: string; message: string; target?: string }[] = [];
+  private tutorialActive: { id: string; message: string; target?: string } | null = null;
 
   constructor(private onAction: (action: Action, pressed: boolean) => void,
     private onMenu: (command: string, id: string) => void = () => {}) {
@@ -21,7 +24,7 @@ export class Controls {
     this.root = document.createElement('div');
     this.root.id = 'overlay';
     this.root.innerHTML = `
-      <div id="hud"><div class="hud-title">Phase 4 · 試玩預覽</div>
+      <div id="hud"><div class="hud-title">Phase 5 · 試玩預覽</div>
         <div id="progress">第一關 · Lv3 · 金錢 0 · 點數 0</div>
         <div class="bar-label">HP <span id="hp-value"></span></div><div class="bar hp"><i id="hp-fill"></i></div>
         <div class="bar-label">MP <span id="mp-value"></span></div><div class="bar mp"><i id="mp-fill"></i></div>
@@ -47,8 +50,30 @@ export class Controls {
         <button data-action="color" class="form-action color-action" aria-label="五色魔法">五色</button>
         <button data-action="shield" class="form-action shield-action" aria-label="絕對防禦">防禦</button>
         <button data-action="meteor" class="form-action meteor-action" aria-label="流星雨">流星</button>
+      </div>
+      <aside id="tutorial" role="status" aria-live="polite" hidden>
+        <strong>遊戲提示</strong><p id="tutorial-message"></p><button id="tutorial-dismiss" type="button">知道了</button>
+      </aside>
+      <div id="victory" role="dialog" aria-modal="true" aria-labelledby="victory-title" hidden>
+        <div class="victory-confetti" aria-hidden="true"></div>
+        <div class="victory-card">
+          <svg class="victory-trophy" viewBox="0 0 200 240" role="img" aria-label="冠軍獎盃">
+            <defs><linearGradient id="trophy-gold" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#fff1a6"/><stop offset=".48" stop-color="#e8ae40"/><stop offset="1" stop-color="#fff4c6"/></linearGradient></defs>
+            <path d="M46 31h108v42c0 46-25 75-54 75S46 119 46 73V31Z" fill="url(#trophy-gold)" stroke="#fff4c9" stroke-width="4"/>
+            <path d="M46 48H24v15c0 36 19 54 51 54M154 48h22v15c0 36-19 54-51 54" fill="none" stroke="#e8ae40" stroke-width="12" stroke-linejoin="round"/>
+            <path d="M89 145h22v35H89zM65 181h70v18H65zM48 201h104v20H48z" fill="url(#trophy-gold)" stroke="#fff4c9" stroke-width="3"/>
+            <path d="m100 56 7 15 16 2-12 12 3 17-14-8-14 8 3-17-12-12 16-2z" fill="#fff8d3"/>
+          </svg>
+          <p id="victory-subtitle"></p><h1 id="victory-title">富邦悍將總冠軍</h1>
+          <p id="victory-detail"></p><button id="victory-next" type="button"></button>
+        </div>
       </div>`;
     game.appendChild(this.root);
+    try {
+      for (const id of JSON.parse(window.localStorage.getItem('juju-game-tutorial-v1') || '[]') as string[])
+        if (typeof id === 'string') this.tutorialSeen.add(id);
+    } catch { /* Tutorials still work in memory if storage is unavailable. */ }
+    (this.root.querySelector('#tutorial-dismiss') as HTMLButtonElement).addEventListener('click', () => this.dismissTutorial());
     this.arena = this.root.querySelector('#move-zone') as HTMLDivElement;
     this.joystick = this.root.querySelector('#joystick') as HTMLDivElement;
     this.stick = this.root.querySelector('#stick') as HTMLDivElement;
@@ -134,16 +159,19 @@ export class Controls {
   setSkills(storm: number, form: Transformation, lightning = 0): void {
     (this.root.querySelector('#storm-fill') as HTMLElement).style.width = `${storm}%`;
     (this.root.querySelector('#storm-value') as HTMLElement).textContent = `${Math.floor(storm)}%`;
+    (this.root.querySelector('[data-action="storm"]') as HTMLElement).classList.toggle('ready', storm >= 100);
     (this.root.querySelector('#lightning-fill') as HTMLElement).style.width = `${lightning}%`;
     (this.root.querySelector('#lightning-value') as HTMLElement).textContent = `${Math.floor(lightning)}%`;
+    (this.root.querySelector('[data-action="lightning"]') as HTMLElement).classList.toggle('ready', lightning >= 100);
     (this.root.querySelector('#form-fill') as HTMLElement).style.width = `${form.active ? form.activeLeft / 20 * 100 : form.cooldownLeft > 0 ? 0 : form.charge}%`;
     (this.root.querySelector('#form-value') as HTMLElement).textContent = form.active ? `${Math.ceil(form.activeLeft)} 秒` :
       form.cooldownLeft > 0 ? `冷卻 ${Math.ceil(form.cooldownLeft)} 秒` : `${Math.floor(form.charge)}%`;
+    (this.root.querySelector('[data-action="transform"]') as HTMLElement).classList.toggle('ready', form.ready);
     this.root.classList.toggle('transformed', form.active);
   }
 
   renderMenu(progress: Progression, stageName: string): void {
-    (this.root.querySelector('.hud-title') as HTMLElement).textContent = `Phase 4 · ${stageName}`;
+    (this.root.querySelector('.hud-title') as HTMLElement).textContent = `Phase 5 · ${stageName}`;
     (this.root.querySelector('#progress') as HTMLElement).textContent = `Lv${progress.data.level} · 金錢 ${progress.data.coins} · 可用點數 ${progress.unspent}`;
     const panel = this.root.querySelector('#menu-panel') as HTMLElement;
     const rows = progress.items().map(item => `<div class="menu-row"><span>${item.name} · ${item.price} 金</span><button data-menu="buy" data-id="${item.id}">購買</button></div>`).join('');
@@ -161,6 +189,58 @@ export class Controls {
 
   announce(message: string): void {
     (this.root.querySelector('#status') as HTMLElement).textContent = message;
+  }
+
+  showTutorial(id: string, message: string, target?: string): void {
+    if (this.tutorialSeen.has(id) || this.tutorialActive?.id === id || this.tutorialQueue.some(tip => tip.id === id)) return;
+    this.tutorialQueue.push({ id, message, target });
+    this.nextTutorial();
+  }
+
+  private nextTutorial(): void {
+    if (this.tutorialActive || !this.tutorialQueue.length) return;
+    this.tutorialActive = this.tutorialQueue.shift()!;
+    this.tutorialSeen.add(this.tutorialActive.id);
+    try { window.localStorage.setItem('juju-game-tutorial-v1', JSON.stringify([...this.tutorialSeen])); }
+    catch { /* Private browsing may reject writes. */ }
+    (this.root.querySelector('#tutorial-message') as HTMLElement).textContent = this.tutorialActive.message;
+    (this.root.querySelector('#tutorial') as HTMLElement).hidden = false;
+    if (this.tutorialActive.target) this.root.querySelector(`[data-action="${this.tutorialActive.target}"], #${this.tutorialActive.target}`)?.classList.add('tutorial-focus');
+  }
+
+  private dismissTutorial(): void {
+    if (!this.tutorialActive) return;
+    this.root.querySelector('.tutorial-focus')?.classList.remove('tutorial-focus');
+    this.tutorialActive = null;
+    (this.root.querySelector('#tutorial') as HTMLElement).hidden = true;
+    this.nextTutorial();
+  }
+
+  showVictory(stage: number, onContinue: () => void): void {
+    this.tutorialQueue.length = 0;
+    this.dismissTutorial();
+    const victory = this.root.querySelector('#victory') as HTMLElement;
+    (this.root.querySelector('#victory-subtitle') as HTMLElement).textContent = stage === 5 ? '主線通關' : '隱藏關 · 真結局';
+    (this.root.querySelector('#victory-detail') as HTMLElement).textContent = stage === 5 ?
+      '巨大紅龍已擊敗，隱藏第六關已解鎖！' : '終極 Boss 已擊敗！';
+    const button = this.root.querySelector('#victory-next') as HTMLButtonElement;
+    button.textContent = stage === 5 ? '挑戰隱藏第六關' : '再次挑戰隱藏關';
+    button.onclick = () => { this.hideVictory(); onContinue(); };
+    const confetti = this.root.querySelector('.victory-confetti') as HTMLElement;
+    confetti.replaceChildren(...Array.from({ length: 28 }, (_, i) => {
+      const ribbon = document.createElement('i');
+      ribbon.style.setProperty('--x', `${(i * 37 + 13) % 100}%`);
+      ribbon.style.setProperty('--delay', `${(i % 11) * -.32}s`);
+      ribbon.style.setProperty('--speed', `${2.8 + (i % 5) * .4}s`);
+      return ribbon;
+    }));
+    victory.hidden = false;
+    button.focus();
+  }
+
+  hideVictory(): void {
+    (this.root.querySelector('#victory') as HTMLElement).hidden = true;
+    (this.root.querySelector('#victory-next') as HTMLButtonElement).onclick = null;
   }
 
   destroy(): void {

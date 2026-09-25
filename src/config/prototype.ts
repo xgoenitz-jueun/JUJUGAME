@@ -2,7 +2,7 @@
 export const prototype = {
   hp: 100,
   mp: 100,
-  mpRegenerationPerSecond: 5,
+  mpRegenerationPerSecond: 5.25,
   kiCost: 25,
   chargeThresholdSeconds: 0.24,
   maxChargeSeconds: 1.5,

@@ -33,6 +33,8 @@ html, body, #game { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 #action-zone { pointer-events: none; position: absolute; right: calc(12px + env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); width: min(330px, 54vw); height: 290px; }
 #action-zone button { pointer-events: auto; touch-action: none; position: absolute; border: 1.5px solid #eaf7ffab; color: white; font-size: 14px; font-weight: 700; border-radius: 50%; width: 72px; height: 72px; opacity: .50; background: #3656a6; box-shadow: 0 3px 12px #0a123988; transition: opacity .1s, transform .1s; }
 #action-zone button.pressed, #action-zone button:active { opacity: .86; transform: scale(.94); }
+#action-zone button.ready { opacity: .9; box-shadow: 0 0 0 3px #fff5, 0 0 22px #86cdff; }
+#action-zone button.tutorial-focus, #menu-toggle.tutorial-focus, #move-zone.tutorial-focus { z-index: 12; outline: 3px solid #ffdf7c; outline-offset: 4px; box-shadow: 0 0 24px #ffdf7c; }
 [data-action=jump] { right: 79px; bottom: 151px; }
 [data-action=roll] { right: 7px; bottom: 133px; }
 [data-action=crouch] { right: 150px; bottom: 130px; }
@@ -51,6 +53,24 @@ html, body, #game { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 #overlay.transformed #action-zone button.shield-action { right: 187px; bottom: 5px; }
 #overlay.transformed #action-zone button.meteor-action { right: 245px; bottom: 178px; }
 #overlay.transformed #action-zone button.attack { background: #884abc; }
+#tutorial { pointer-events: auto; position: absolute; z-index: 11; left: 50%; top: 41%; transform: translate(-50%, -50%); width: min(340px, 76vw); padding: 13px 16px; border-radius: 17px; background: #112648ef; border: 2px solid #8bc8ff; box-shadow: 0 14px 35px #061329b8; text-align: center; }
+#tutorial[hidden], #victory[hidden] { display: none; }
+#tutorial strong { color: #ffdf7c; }
+#tutorial p { line-height: 1.5; font-size: 14px; margin: 6px 0 10px; }
+#tutorial button, #victory-next { pointer-events: auto; min-height: 40px; border: 1px solid #cce9ff; border-radius: 12px; padding: 8px 18px; color: #fff; background: #2863ae; font-size: 14px; font-weight: 700; }
+#victory { pointer-events: auto; position: absolute; z-index: 20; inset: 0; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle at 50% 42%, #284e90e8, #071936f5 75%); text-align: center; padding: 20px; }
+.victory-card { position: relative; z-index: 1; width: min(480px, 90vw); animation: trophy-arrive .9s ease-out both; }
+.victory-trophy { display: block; height: clamp(125px, 36vh, 240px); margin: auto; filter: drop-shadow(0 0 22px #ffdb79); }
+#victory-subtitle { color: #a7d8ff; font-weight: 800; letter-spacing: .15em; margin: 0; }
+#victory-title { font-size: clamp(26px, 5vw, 46px); text-shadow: 0 0 20px #79baff; line-height: 1.25; margin: 8px 0; }
+#victory-detail { font-size: 14px; margin: 10px 0 17px; }
+#victory-next { background: #2665c4; box-shadow: 0 0 18px #78bbff80; }
+.victory-confetti { position: absolute; inset: 0; overflow: hidden; }
+.victory-confetti i { position: absolute; top: -15%; left: var(--x); width: 10px; height: 42px; border-radius: 3px; background: linear-gradient(135deg, #a8e6ff, #1670de 65%, #e0f4ff); transform: rotate(20deg); opacity: .85; animation: ribbon-fall var(--speed) linear var(--delay) infinite; }
+.victory-confetti i:nth-child(3n) { background: #6ec0ff; width: 6px; height: 33px; }
+@keyframes trophy-arrive { from { opacity: 0; transform: translateY(100px) scale(.65); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes ribbon-fall { from { transform: translateY(-20vh) rotate(15deg); } to { transform: translateY(120vh) rotate(540deg); } }
+@media (prefers-reduced-motion: reduce) { .victory-card { animation: none; } .victory-confetti i { animation-duration: 9s; } }
 @media (orientation: portrait) {
   #hud { max-width: 75vw; }
   #hint { display: none; }
@@ -58,8 +78,12 @@ html, body, #game { margin: 0; width: 100%; height: 100%; overflow: hidden; }
   #menu-panel { top: calc(315px + env(safe-area-inset-top)); max-height: 38vh; max-height: 38dvh; }
   #move-zone { height: 35%; width: 45%; }
   #action-zone { transform: scale(.8); transform-origin: right bottom; width: 330px; }
+  #tutorial { top: 53%; width: min(340px, 87vw); }
 }
 @media (max-height: 440px) {
   #action-zone { transform: scale(.72); transform-origin: right bottom; }
   #hint { font-size: 10px; }
+  .victory-trophy { height: 105px; }
+  #victory-title { font-size: 27px; }
+  #victory-detail { margin: 4px 0 8px; }
 }

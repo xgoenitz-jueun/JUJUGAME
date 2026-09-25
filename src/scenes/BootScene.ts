@@ -29,7 +29,7 @@ type Hazard = { x: number; y: number; radius: number; left: number; tick: number
 const LEVELS: Record<number, Level> = { 1: stage1, 2: stage2, 3: stage3, 4: stage4, 5: stage5, 6: stage6 };
 const COLORS = [0xff814c, 0x60cfff, 0xf7de69, 0x8ed976, 0xe992f5];
 
-/** Phases 1–2. JSON drives enemy stats, layouts, checkpoints and shop items. */
+/** JSON drives enemy stats, layouts, checkpoints and shop items. */
 export class BootScene extends Phaser.Scene {
   private player!: Player;
   private ui!: Controls;
@@ -56,6 +56,7 @@ export class BootScene extends Phaser.Scene {
   private slowLeft = 0;
   private deadPending = false;
   private finished = false;
+  private stageSlimeKills = 0;
 
   constructor() { super('Boot'); }
 
@@ -118,6 +119,8 @@ export class BootScene extends Phaser.Scene {
     this.clearStage();
     this.level = LEVELS[number];
     this.finished = false;
+    this.stageSlimeKills = 0;
+    this.ui.hideVictory();
     this.deadPending = false;
     this.slowLeft = 0;
     this.sealLeft = 0;
@@ -149,6 +152,7 @@ export class BootScene extends Phaser.Scene {
     this.layout();
     this.refreshHud();
     this.ui.announce(`${this.level.name}：擊敗怪物、啟動傳送點，再挑戰 Boss`);
+    if (number === 1) this.ui.showTutorial('move', '拖曳左側搖桿上下左右移動，調整縱深對準怪物。', 'move-zone');
   }
 
   private depthFor(index: number): number { return this.scale.height * (.54 + (index % 3 - 1) * .065); }
@@ -244,6 +248,7 @@ export class BootScene extends Phaser.Scene {
     this.cameras.main.scrollX = Phaser.Math.Clamp(p.x - this.scale.width * .30, 0,
       Math.max(0, this.level.worldWidth - this.scale.width));
     if (!this.deadPending && !this.finished) {
+      this.updateTutorials();
       for (const enemy of this.enemies) enemy.update(dt, p);
       this.updateDarkFlame(dt);
       this.checkCheckpoints();
@@ -253,6 +258,25 @@ export class BootScene extends Phaser.Scene {
     }
     this.ui.setMeters(p.hp, p.mp, this.player.maxHp, this.player.maxMp);
     this.ui.setSkills(this.stormGauge, this.form, this.lightningGauge);
+  }
+
+  private updateTutorials(): void {
+    if (this.level.number === 1) {
+      const p = this.player.snapshot;
+      const firstSlime = this.enemies.find(enemy => enemy.config.id === 'slime' && enemy.alive);
+      if (firstSlime && Math.abs(firstSlime.x - p.x) < 420)
+        this.ui.showTutorial('attack', '遇到史萊姆了！點按「攻擊」使出三段連擊。', 'attack');
+      if (this.stageSlimeKills >= 2)
+        this.ui.showTutorial('ki', '已擊敗數隻史萊姆。按住「氣功」蓄力，放開後瞬間射出粉紅光束；也可長按「攻擊」。', 'ki');
+      const boss = this.enemies.find(enemy => enemy.boss && enemy.alive);
+      if (boss && boss.x - p.x < 680) {
+        this.ui.showTutorial('storm', 'Boss 就在前方！藍色風暴量表滿格發光時，按「風暴」向四方擴散。', 'storm');
+      }
+      if (this.form.ready && boss && boss.x - p.x < 1100)
+        this.ui.showTutorial('transform', '變身量表已滿！按「變身」切換白蝶造型，持續 20 秒。', 'transform');
+    } else if (this.level.number === 2 && this.form.ready) {
+      this.ui.showTutorial('transform', '變身量表已滿！按「變身」切換白蝶造型，持續 20 秒。', 'transform');
+    }
   }
 
   private melee(step: number): void {
@@ -273,6 +297,7 @@ export class BootScene extends Phaser.Scene {
     if (!enemy.alive) return false;
     const before = enemy.hp;
     if (enemy.hit(damage)) {
+      if (this.level.number === 1 && enemy.config.id === 'slime') this.stageSlimeKills++;
       const graphic = this.add.graphics().setDepth(enemy.depthY + 2);
       this.drops.push({ x: enemy.x, y: enemy.depthY, coins: enemy.config.coinDrop,
         points: enemy.config.skillPointDrop, graphic });
@@ -286,10 +311,15 @@ export class BootScene extends Phaser.Scene {
         this.finished = true;
         this.progress.clear(stage, this.level.levelUpOnClear);
         this.refreshHud();
-        this.ui.announce(stage < 6 ? `${enemy.config.displayName}已擊敗！${stage === 5 ? '隱藏第六關已解鎖！' : '進入下一關'}` : '終極 Boss 已擊敗！隱藏第六關完成');
-        this.time.delayedCall(1100, () => {
-          if (stage < 6) this.loadStage(stage + 1);
-        });
+        if (stage >= 5) {
+          this.ui.showVictory(stage, () => {
+            if (stage === 6) this.progress.selectStage(6);
+            this.loadStage(6);
+          });
+        } else {
+          this.ui.announce(`${enemy.config.displayName}已擊敗！進入下一關`);
+          this.time.delayedCall(1100, () => this.loadStage(stage + 1));
+        }
       }
     }
     if (gainGauge && enemy.hp < before) {
@@ -481,6 +511,8 @@ export class BootScene extends Phaser.Scene {
     }
     const direction = p.x >= enemy.x ? 1 : -1;
     if (pattern.kind === 'ranged') {
+      if (this.level.number === 1)
+        this.ui.showTutorial('dodge', '遠程攻擊來了！按「翻滾」閃避，或按住「蹲下」躲開飛來的彈幕。', 'roll');
       this.spawnShot({ x: enemy.x + direction * 34, y: enemy.depthY, elevation: 0, direction,
         damage: pattern.damage, slow: pattern.slowSeconds || 0, seal: pattern.sealSeconds || 0,
         owner: 'enemy', power: 0, element: pattern.element });
@@ -648,6 +680,7 @@ export class BootScene extends Phaser.Scene {
       this.drops.splice(i, 1);
       this.refreshHud();
       this.ui.announce(`拾取 ${drop.coins} 金錢、${drop.points} 技能點`);
+      this.ui.showTutorial('shop', '拾取金錢與技能點！打開「背包／商店」購買補給、裝備並分配素質。', 'menu-toggle');
     }
   }
 
@@ -657,6 +690,7 @@ export class BootScene extends Phaser.Scene {
       if (p.x < cp.position || cp.position <= (this.progress.data.checkpoints[String(this.level.number)]?.position || 0)) continue;
       this.progress.checkpoint(this.level.number, cp.id, cp.position);
       this.ui.announce('這是重生點，之後陣亡會從這裡復活');
+      this.ui.showTutorial('checkpoint', '已啟動傳送點！陣亡後會從最近啟動的位置復活。');
     }
     this.drawMarkers();
   }
