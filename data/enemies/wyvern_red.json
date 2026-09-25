@@ -1,0 +1,1 @@
+{"id":"wyvern_red","displayName":"紅色飛龍","type":"normal","stage":6,"hp":225,"speed":110,"color":15368250,"coinDrop":38,"skillPointDrop":0,"patterns":[{"id":"fire","damage":24,"range":300,"cooldown":3,"windup":0.65,"kind":"ranged","element":"fire"}],"spriteRef":"assets/sprites/wyvern_red.png"}

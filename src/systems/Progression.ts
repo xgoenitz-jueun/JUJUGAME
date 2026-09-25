@@ -31,12 +31,12 @@ export class Progression {
     this.data = fresh();
     try {
       const value = JSON.parse(storage.getItem(KEY) || 'null') as Partial<SaveData> | null;
-      if (value && [1, 2, 3, 4].includes(value.stage || 0)) {
+      if (value && [1, 2, 3, 4, 5, 6].includes(value.stage || 0)) {
         this.data = { ...fresh(), ...value, stats: { ...fresh().stats, ...value.stats },
           consumables: value.consumables || {}, checkpoints: value.checkpoints || {},
           ownedEquipment: value.ownedEquipment || [], equipped: value.equipped || {} };
         // An older Phase 2 save kept stage=2 after its Boss was defeated.
-        this.data.stage = Math.min(4, Math.max(this.data.stage, this.data.cleared + 1));
+        if (this.data.stage <= 4) this.data.stage = Math.min(6, Math.max(this.data.stage, this.data.cleared + 1));
       }
     } catch { /* Corrupt local data starts a new local run. */ }
   }
@@ -108,7 +108,13 @@ export class Progression {
   clear(stage: number, level: number): void {
     this.data.cleared = Math.max(this.data.cleared, stage);
     this.data.level = level;
-    if (stage < 4) this.data.stage = stage + 1;
+    if (stage < 6) this.data.stage = stage + 1;
+    this.save();
+  }
+
+  selectStage(stage: 5 | 6): void {
+    if (this.data.cleared < stage - 1) return;
+    this.data.stage = stage;
     this.save();
   }
 

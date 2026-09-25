@@ -9,15 +9,26 @@ import ghost from '../../data/enemies/ghost.json';
 import zombie from '../../data/enemies/zombie.json';
 import orc from '../../data/enemies/orc.json';
 import cyclops from '../../data/enemies/cyclops.json';
+import redDragon from '../../data/enemies/red_dragon.json';
+import wyvernRed from '../../data/enemies/wyvern_red.json';
+import wyvernBlue from '../../data/enemies/wyvern_blue.json';
+import wyvernGold from '../../data/enemies/wyvern_gold.json';
+import wyvernGreen from '../../data/enemies/wyvern_green.json';
+import wyvernPurple from '../../data/enemies/wyvern_purple.json';
+import finalBoss from '../../data/enemies/final_boss.json';
 
-export type AttackKind = 'melee' | 'ranged' | 'lunge' | 'combo' | 'wave' | 'buff' | 'phase' | 'grab' | 'poison' | 'summon' | 'laser';
-export interface Pattern { id: string; damage: number; range: number; cooldown: number; windup: number; kind: AttackKind; slowSeconds?: number; sealSeconds?: number; hits?: number }
+export type AttackKind = 'melee' | 'ranged' | 'lunge' | 'combo' | 'wave' | 'buff' | 'phase' | 'grab' | 'poison' | 'summon' | 'laser' | 'fire' | 'dive';
+export interface Pattern { id: string; damage: number; range: number; cooldown: number; windup: number; kind: AttackKind; slowSeconds?: number; sealSeconds?: number; hits?: number; element?: 'fire' | 'ice' | 'lightning' | 'dark'; phase?: number }
 export interface EnemyConfig {
   id: string; displayName: string; type: 'normal' | 'boss'; stage: number;
   hp: number; speed: number; color: number; coinDrop: number; skillPointDrop: number;
   enrageBelow?: number; patterns: Pattern[]; spriteRef: string;
+  phaseTwoSpriteRef?: string;
+  phaseTwo?: { triggerHpRatio: number; maxHpMultiplier: number; darkFlameIntervalSeconds: number; darkFlameWarningSeconds: number; darkFlameMaxHpRatio: number };
 }
-export const ENEMIES: Record<string, EnemyConfig> = { slime, goblin, wolf, tiger, ghost, zombie, orc, cyclops } as unknown as Record<string, EnemyConfig>;
+export const ENEMIES: Record<string, EnemyConfig> = { slime, goblin, wolf, tiger, ghost, zombie, orc, cyclops,
+  red_dragon: redDragon, wyvern_red: wyvernRed, wyvern_blue: wyvernBlue, wyvern_gold: wyvernGold,
+  wyvern_green: wyvernGreen, wyvern_purple: wyvernPurple, final_boss: finalBoss } as unknown as Record<string, EnemyConfig>;
 
 export class Enemy {
   readonly graphics: Phaser.GameObjects.Graphics;
@@ -25,7 +36,7 @@ export class Enemy {
   readonly label: Phaser.GameObjects.Text;
   readonly statusLabel: Phaser.GameObjects.Text;
   readonly status = new EnemyStatus();
-  readonly maxHp: number;
+  maxHp: number;
   hp: number;
   x: number;
   depthY: number;
@@ -40,6 +51,8 @@ export class Enemy {
   private phaseLeft = 0;
   private visualTime = 0;
   summoned = false;
+  phaseTwo = false;
+  phaseJustChanged = false;
 
   constructor(private scene: Phaser.Scene, readonly config: EnemyConfig, x: number, depthY: number,
     private attack: (enemy: Enemy, pattern: Pattern) => void,
@@ -68,7 +81,7 @@ export class Enemy {
     this.flash = Math.max(0, this.flash - dt);
     this.phaseLeft = Math.max(0, this.phaseLeft - dt);
     this.buffLeft = Math.max(0, this.buffLeft - dt);
-    const speedMultiplier = this.enraged ? 1.35 : 1;
+    const speedMultiplier = this.enraged || this.phaseTwo ? 1.35 : 1;
     const cooldownMultiplier = this.enraged || this.buffLeft > 0 ? 1.3 : 1;
     if (this.selected && this.status.canAttack) {
       this.windup -= dt;
@@ -89,7 +102,7 @@ export class Enemy {
         // Each attack is telegraphed. Use long range only when the player is in reach.
         for (let tries = 0; tries < options.length; tries++) {
           const pattern = options[(this.nextPattern + tries) % options.length];
-          if (Math.abs(dx) <= pattern.range && Math.abs(dy) < 65) {
+          if ((!pattern.phase || this.phaseTwo) && Math.abs(dx) <= pattern.range && Math.abs(dy) < 65) {
             this.nextPattern = (this.nextPattern + tries + 1) % options.length;
             this.selected = pattern;
             this.windup = pattern.windup;
@@ -107,6 +120,18 @@ export class Enemy {
     if (this.phaseLeft > 0) return false;
     this.hp = Math.max(0, this.hp - damage);
     this.flash = .16;
+    if (this.config.phaseTwo && !this.phaseTwo && this.hp <= this.maxHp * this.config.phaseTwo.triggerHpRatio) {
+      this.phaseTwo = true;
+      this.phaseJustChanged = true;
+      this.maxHp = Math.round(this.maxHp * this.config.phaseTwo.maxHpMultiplier);
+      this.hp = this.maxHp;
+      this.selected = null;
+      this.windup = 0;
+      this.cooldown = 2;
+      this.sprite.setTexture(`${this.config.id}_phase2`);
+      this.render();
+      return false;
+    }
     if (!this.hp) {
       this.alive = false;
       this.graphics.setVisible(false);
@@ -141,7 +166,8 @@ export class Enemy {
     g.fillStyle(0x142234, .25).fillEllipse(this.x, this.depthY, this.boss ? 78 : 57, 15);
     if (this.scene.textures.exists(this.config.id)) {
       this.sprite.setPosition(this.x, this.depthY).setDepth(this.depthY + 1)
-        .setDisplaySize(this.boss ? 115 : 82, this.boss ? 115 : 78)
+        .setDisplaySize(this.config.id === 'red_dragon' ? 205 : this.config.id === 'final_boss' ? 145 : this.boss ? 115 : 82,
+          this.config.id === 'red_dragon' ? 200 : this.config.id === 'final_boss' ? 155 : this.boss ? 115 : 78)
         .setFlipX(this.faceRight);
       if (this.flash > 0) this.sprite.setTint(0xffffff);
       else this.sprite.clearTint();
@@ -193,7 +219,8 @@ export class Enemy {
     }
     g.fillStyle(0x16233b).fillRoundedRect(this.x - 27, this.depthY - 94, 54, 6, 3);
     g.fillStyle(this.boss ? 0xffb36e : 0xf16c84).fillRoundedRect(this.x - 27, this.depthY - 94, 54 * this.hp / this.maxHp, 6, 3);
-    this.label.setPosition(this.x, this.depthY - 105).setDepth(this.depthY + 2);
+    this.label.setText(this.phaseTwo ? `${this.config.displayName} · 惡魔形態` : this.config.displayName)
+      .setPosition(this.x, this.depthY - 105).setDepth(this.depthY + 2);
     const active = this.status.active;
     this.statusLabel.setText(active.map(color => STATUS_CONFIG[color].name).join(' · '))
       .setPosition(this.x, this.depthY - 137).setDepth(this.depthY + 3).setVisible(active.length > 0);

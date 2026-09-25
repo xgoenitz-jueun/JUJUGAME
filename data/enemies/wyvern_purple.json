@@ -1,0 +1,1 @@
+{"id":"wyvern_purple","displayName":"紫色飛龍","type":"normal","stage":6,"hp":240,"speed":115,"color":11166390,"coinDrop":40,"skillPointDrop":0,"patterns":[{"id":"curse","damage":21,"range":340,"cooldown":3.5,"windup":0.85,"kind":"ranged","element":"dark","sealSeconds":1.5}],"spriteRef":"assets/sprites/wyvern_purple.png"}

@@ -70,7 +70,7 @@ function setup() {
 test('一般與變身技能按鈕都有獨立觸控按下、放開與取消事件', () => {
   const { controls, root, events } = setup();
   assert.deepEqual(root.buttons.map(button => button.dataset.action),
-    ['jump', 'roll', 'crouch', 'ki', 'attack', 'storm', 'transform', 'color', 'shield', 'meteor']);
+    ['jump', 'roll', 'crouch', 'ki', 'attack', 'storm', 'lightning', 'transform', 'color', 'shield', 'meteor']);
   for (const button of root.buttons) {
     button.dispatch('pointerdown');
     assert.equal(button.classList.contains('pressed'), true);

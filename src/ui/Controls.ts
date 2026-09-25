@@ -1,4 +1,4 @@
-export type Action = 'attack' | 'ki' | 'jump' | 'roll' | 'crouch' | 'storm' | 'transform' | 'color' | 'shield' | 'meteor';
+export type Action = 'attack' | 'ki' | 'jump' | 'roll' | 'crouch' | 'storm' | 'transform' | 'color' | 'shield' | 'meteor' | 'lightning';
 import type { Progression } from '../systems/Progression';
 import type { Transformation } from '../state/Transformation';
 
@@ -21,16 +21,17 @@ export class Controls {
     this.root = document.createElement('div');
     this.root.id = 'overlay';
     this.root.innerHTML = `
-      <div id="hud"><div class="hud-title">Phase 1 · 操作／戰鬥原型</div>
+      <div id="hud"><div class="hud-title">Phase 4 · 試玩預覽</div>
         <div id="progress">第一關 · Lv3 · 金錢 0 · 點數 0</div>
         <div class="bar-label">HP <span id="hp-value"></span></div><div class="bar hp"><i id="hp-fill"></i></div>
         <div class="bar-label">MP <span id="mp-value"></span></div><div class="bar mp"><i id="mp-fill"></i></div>
         <div class="bar-label">藍色風暴 <span id="storm-value">0%</span></div><div class="bar storm"><i id="storm-fill"></i></div>
         <div class="bar-label">變身 <span id="form-value">0%</span></div><div class="bar form"><i id="form-fill"></i></div>
+        <div class="bar-label">全屏閃電 <span id="lightning-value">0%</span></div><div class="bar lightning"><i id="lightning-fill"></i></div>
         <div id="status" role="status" aria-live="polite">移動靠近練習標靶，試試三段連擊</div>
         <a id="sprite-gallery" href="./sprites.html">檢視本次角色與技能圖片</a>
       </div>
-      <div id="hint">WASD 移動 · J 攻擊 · G 氣功 · B 風暴 · T 變身 · F 五色 · H 防禦 · M 流星雨</div>
+      <div id="hint">WASD 移動 · J 攻擊 · G 氣功 · B 風暴 · V 閃電 · T 變身 · F 五色 · H 防禦 · M 流星雨</div>
       <button id="menu-toggle" aria-label="開關背包商店與配點選單" aria-expanded="false">背包／商店</button>
       <section id="menu-panel" aria-label="背包商店與配點" hidden></section>
       <div id="move-zone" aria-label="移動搖桿觸控區"><div id="joystick"><div id="stick"></div></div></div>
@@ -41,6 +42,7 @@ export class Controls {
         <button data-action="ki" class="special" aria-label="按住氣功蓄力，放開發射">氣功</button>
         <button data-action="attack" class="attack" aria-label="點按拳腳連擊，長按蓄力氣功">攻擊</button>
         <button data-action="storm" class="storm-action" aria-label="藍色風暴">風暴</button>
+        <button data-action="lightning" class="lightning-action" aria-label="全屏閃電">閃電</button>
         <button data-action="transform" class="transform-action" aria-label="變身">變身</button>
         <button data-action="color" class="form-action color-action" aria-label="五色魔法">五色</button>
         <button data-action="shield" class="form-action shield-action" aria-label="絕對防禦">防禦</button>
@@ -129,9 +131,11 @@ export class Controls {
     (this.root.querySelector('#mp-value') as HTMLElement).textContent = `${Math.ceil(mp)} / ${maxMp}`;
   }
 
-  setSkills(storm: number, form: Transformation): void {
+  setSkills(storm: number, form: Transformation, lightning = 0): void {
     (this.root.querySelector('#storm-fill') as HTMLElement).style.width = `${storm}%`;
     (this.root.querySelector('#storm-value') as HTMLElement).textContent = `${Math.floor(storm)}%`;
+    (this.root.querySelector('#lightning-fill') as HTMLElement).style.width = `${lightning}%`;
+    (this.root.querySelector('#lightning-value') as HTMLElement).textContent = `${Math.floor(lightning)}%`;
     (this.root.querySelector('#form-fill') as HTMLElement).style.width = `${form.active ? form.activeLeft / 20 * 100 : form.cooldownLeft > 0 ? 0 : form.charge}%`;
     (this.root.querySelector('#form-value') as HTMLElement).textContent = form.active ? `${Math.ceil(form.activeLeft)} 秒` :
       form.cooldownLeft > 0 ? `冷卻 ${Math.ceil(form.cooldownLeft)} 秒` : `${Math.floor(form.charge)}%`;
@@ -139,7 +143,7 @@ export class Controls {
   }
 
   renderMenu(progress: Progression, stageName: string): void {
-    (this.root.querySelector('.hud-title') as HTMLElement).textContent = `Phase 3 · ${stageName}`;
+    (this.root.querySelector('.hud-title') as HTMLElement).textContent = `Phase 4 · ${stageName}`;
     (this.root.querySelector('#progress') as HTMLElement).textContent = `Lv${progress.data.level} · 金錢 ${progress.data.coins} · 可用點數 ${progress.unspent}`;
     const panel = this.root.querySelector('#menu-panel') as HTMLElement;
     const rows = progress.items().map(item => `<div class="menu-row"><span>${item.name} · ${item.price} 金</span><button data-menu="buy" data-id="${item.id}">購買</button></div>`).join('');
@@ -151,7 +155,7 @@ export class Controls {
       const item = progress.item(id);
       return item ? `<div class="menu-row"><span>${item.name} ×${count}</span><button data-menu="use" data-id="${id}">使用</button></div>` : '';
     }).join('') || '尚無補給';
-    panel.innerHTML = `<h2>補給商店與裝備店</h2>${rows}<h2>背包 · 補給</h2>${inventory}<h2>背包 · 裝備</h2>${owned}<h2>技能點數 (${progress.unspent})</h2>
+    panel.innerHTML = `${progress.data.cleared >= 4 ? '<h2>已解鎖關卡</h2><div class="stat-grid"><button data-menu="travel" data-id="5">第五關 · 龍之巢穴</button>' + (progress.data.cleared >= 5 ? '<button data-menu="travel" data-id="6">隱藏第六關</button>' : '') + '</div>' : ''}<h2>補給商店與裝備店</h2>${rows}<h2>背包 · 補給</h2>${inventory}<h2>背包 · 裝備</h2>${owned}<h2>技能點數 (${progress.unspent})</h2>
       <div class="stat-grid">${(['STR', 'DEF', 'MAGIC', 'SPD', 'VIT'] as const).map(stat => `<button data-menu="stat" data-id="${stat}">${stat} ${progress.data.stats[stat]} ＋</button>`).join('')}</div>`;
   }
 

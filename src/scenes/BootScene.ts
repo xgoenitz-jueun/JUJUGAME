@@ -3,7 +3,9 @@ import stage1 from '../../data/levels/stage1.json';
 import stage2 from '../../data/levels/stage2.json';
 import stage3 from '../../data/levels/stage3.json';
 import stage4 from '../../data/levels/stage4.json';
-import { Enemy, ENEMIES, type Pattern } from '../entities/Enemy';
+import stage5 from '../../data/levels/stage5.json';
+import stage6 from '../../data/levels/stage6.json';
+import { Enemy, ENEMIES, type EnemyConfig, type Pattern } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { prototype } from '../config/prototype';
 import { Progression, type Stat } from '../systems/Progression';
@@ -13,16 +15,18 @@ import { STATUS_COLORS, STATUS_CONFIG } from '../state/EnemyStatus';
 
 type Level = {
   id: string; number: number; name: string; worldWidth: number; background: string;
+  enemyScale?: { hp: number; damage: number; speed: number };
   checkpoints: { id: string; position: number }[];
   spawnTable: { enemyId: string; positions: number[] }[];
   boss: { enemyId: string; position: number };
   levelUpOnClear: number;
 };
 type Shot = { x: number; y: number; elevation: number; direction: number; damage: number;
-  slow: number; seal: number; owner: 'enemy' | 'player'; power: number; life: number; graphic: Phaser.GameObjects.Graphics };
+  slow: number; seal: number; owner: 'enemy' | 'player'; power: number; life: number; graphic: Phaser.GameObjects.Graphics;
+  element?: 'fire' | 'ice' | 'lightning' | 'dark' };
 type Drop = { x: number; y: number; coins: number; points: number; graphic: Phaser.GameObjects.Graphics };
 type Hazard = { x: number; y: number; radius: number; left: number; tick: number; graphic: Phaser.GameObjects.Graphics };
-const LEVELS: Record<number, Level> = { 1: stage1, 2: stage2, 3: stage3, 4: stage4 };
+const LEVELS: Record<number, Level> = { 1: stage1, 2: stage2, 3: stage3, 4: stage4, 5: stage5, 6: stage6 };
 const COLORS = [0xff814c, 0x60cfff, 0xf7de69, 0x8ed976, 0xe992f5];
 
 /** Phases 1–2. JSON drives enemy stats, layouts, checkpoints and shop items. */
@@ -39,6 +43,11 @@ export class BootScene extends Phaser.Scene {
   private hazards: Hazard[] = [];
   private form = new Transformation();
   private stormGauge = 0;
+  private lightningGauge = 0;
+  private darkFlameTimer = 0;
+  private darkFlameWarning = 0;
+  private darkFlameBoss: Enemy | null = null;
+  private darkWarningVisual: Phaser.GameObjects.Image | null = null;
   private stormCooldown = 0;
   private meteorUsed = false;
   private specialLock = 0;
@@ -65,8 +74,11 @@ export class BootScene extends Phaser.Scene {
       this.load.spritesheet(name, url(name), { frameWidth: idle ? 220 : 260, frameHeight: idle ? 270 : 290 });
     }
     for (const name of ['blue_storm_front', 'blue_storm_back', 'blue_storm_left', 'blue_storm_right',
+      'super_lightning_blue', 'super_lightning_gold', 'final_boss_dark_flame',
       'transform_five_color_magic', 'transform_absolute_defense', 'transform_meteor_rain']) this.load.image(name, url(name));
     for (const config of Object.values(ENEMIES)) this.load.image(config.id, `${import.meta.env.BASE_URL}${config.spriteRef}`);
+    if (ENEMIES.final_boss.phaseTwoSpriteRef)
+      this.load.image('final_boss_phase2', `${import.meta.env.BASE_URL}${ENEMIES.final_boss.phaseTwoSpriteRef}`);
   }
 
   create(): void {
@@ -83,9 +95,9 @@ export class BootScene extends Phaser.Scene {
       (command, id) => this.menuAction(command, id));
     const keyboard = this.input.keyboard;
     if (keyboard) {
-      this.keys = keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,J,G,K,L,C,B,T,F,H,M') as Record<string, Phaser.Input.Keyboard.Key>;
+      this.keys = keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,J,G,K,L,C,B,T,F,H,M,V') as Record<string, Phaser.Input.Keyboard.Key>;
       const bindings: Record<string, Action> = { J: 'attack', G: 'ki', K: 'jump', L: 'roll', C: 'crouch',
-        B: 'storm', T: 'transform', F: 'color', H: 'shield', M: 'meteor' };
+        B: 'storm', T: 'transform', F: 'color', H: 'shield', M: 'meteor', V: 'lightning' };
       for (const [key, action] of Object.entries(bindings)) {
         this.keys[key].on('down', () => this.action(action, true));
         this.keys[key].on('up', () => this.action(action, false));
@@ -110,6 +122,10 @@ export class BootScene extends Phaser.Scene {
     this.slowLeft = 0;
     this.sealLeft = 0;
     this.stormGauge = 0;
+    this.lightningGauge = 0;
+    this.darkFlameTimer = 0;
+    this.darkFlameWarning = 0;
+    this.darkFlameBoss = null;
     this.stormCooldown = 0;
     this.form.reset();
     this.meteorUsed = false;
@@ -121,7 +137,7 @@ export class BootScene extends Phaser.Scene {
     for (const wave of this.level.spawnTable) {
       wave.positions.forEach((x, index) => {
         if (cp && x < cp.position - 70) return;
-        this.enemies.push(new Enemy(this, ENEMIES[wave.enemyId], x, this.depthFor(index),
+        this.enemies.push(new Enemy(this, this.enemyConfig(wave.enemyId), x, this.depthFor(index),
           (enemy, pattern) => this.enemyAttack(enemy, pattern),
           (enemy, damage) => this.hitEnemy(enemy, damage, false)));
       });
@@ -137,7 +153,17 @@ export class BootScene extends Phaser.Scene {
 
   private depthFor(index: number): number { return this.scale.height * (.54 + (index % 3 - 1) * .065); }
 
+  private enemyConfig(id: string): EnemyConfig {
+    const base = ENEMIES[id];
+    const scale = this.level.enemyScale;
+    if (!scale || base.type === 'boss') return base;
+    return { ...base, hp: Math.round(base.hp * scale.hp), speed: Math.round(base.speed * scale.speed),
+      patterns: base.patterns.map(pattern => ({ ...pattern, damage: Math.round(pattern.damage * scale.damage) })) };
+  }
+
   private clearStage(): void {
+    this.darkWarningVisual?.destroy();
+    this.darkWarningVisual = null;
     this.enemies.forEach(enemy => enemy.destroy());
     this.shots.forEach(shot => shot.graphic.destroy());
     this.drops.forEach(drop => drop.graphic.destroy());
@@ -151,6 +177,7 @@ export class BootScene extends Phaser.Scene {
   private action(action: Action, pressed: boolean): void {
     if (this.deadPending || this.finished) return;
     if (pressed && action === 'storm') this.blueStorm();
+    else if (pressed && action === 'lightning') this.superLightning();
     else if (pressed && action === 'transform') this.transform();
     else if (pressed && action === 'color') this.fiveColor();
     else if (pressed && action === 'shield') this.absoluteDefense();
@@ -168,6 +195,14 @@ export class BootScene extends Phaser.Scene {
   }
 
   private menuAction(command: string, id: string): void {
+    if (command === 'travel') {
+      const stage = Number(id);
+      if ((stage === 5 || stage === 6) && this.progress.data.cleared >= stage - 1) {
+        this.progress.selectStage(stage);
+        this.loadStage(stage, true);
+      }
+      return;
+    }
     if (command === 'buy') this.ui.announce(this.progress.buy(id));
     if (command === 'equip') this.ui.announce(this.progress.equip(id));
     if (command === 'stat') this.ui.announce(this.progress.allocate(id as Stat));
@@ -198,8 +233,8 @@ export class BootScene extends Phaser.Scene {
       this.ui.announce('變身結束，60 秒後可重新集滿量表');
     }
     this.player.protected = this.form.shieldLeft > 0;
-    const firstAlive = this.enemies.find(enemy => enemy.alive);
-    const barrier = firstAlive ? Math.min(this.level.worldWidth, firstAlive.x + 155) : this.level.worldWidth;
+    const firstAliveX = Math.min(...this.enemies.filter(enemy => enemy.alive).map(enemy => enemy.x));
+    const barrier = Number.isFinite(firstAliveX) ? Math.min(this.level.worldWidth, firstAliveX + 155) : this.level.worldWidth;
     this.player.update(dt, this.deadPending || this.finished ? 0 : this.moveX() * (this.slowLeft > 0 ? .55 : 1),
       this.deadPending || this.finished ? 0 : this.moveY() * (this.slowLeft > 0 ? .55 : 1), {
         width: barrier,
@@ -210,13 +245,14 @@ export class BootScene extends Phaser.Scene {
       Math.max(0, this.level.worldWidth - this.scale.width));
     if (!this.deadPending && !this.finished) {
       for (const enemy of this.enemies) enemy.update(dt, p);
+      this.updateDarkFlame(dt);
       this.checkCheckpoints();
       this.checkDrops();
       this.updateShots(dt);
       this.updateHazards(dt);
     }
     this.ui.setMeters(p.hp, p.mp, this.player.maxHp, this.player.maxMp);
-    this.ui.setSkills(this.stormGauge, this.form);
+    this.ui.setSkills(this.stormGauge, this.form, this.lightningGauge);
   }
 
   private melee(step: number): void {
@@ -250,15 +286,23 @@ export class BootScene extends Phaser.Scene {
         this.finished = true;
         this.progress.clear(stage, this.level.levelUpOnClear);
         this.refreshHud();
-        this.ui.announce(stage < 4 ? `${enemy.config.displayName}已擊敗！進入第${['', '二', '三', '四'][stage]}關` : '獨眼巨人已擊敗！Phase 3 四關完成');
+        this.ui.announce(stage < 6 ? `${enemy.config.displayName}已擊敗！${stage === 5 ? '隱藏第六關已解鎖！' : '進入下一關'}` : '終極 Boss 已擊敗！隱藏第六關完成');
         this.time.delayedCall(1100, () => {
-          if (stage < 4) this.loadStage(stage + 1);
+          if (stage < 6) this.loadStage(stage + 1);
         });
       }
     }
     if (gainGauge && enemy.hp < before) {
       this.stormGauge = Math.min(100, this.stormGauge + (enemy.boss ? 8 : 17));
+      this.lightningGauge = Math.min(100, this.lightningGauge + (enemy.boss ? 5 : 11));
       this.form.gain(enemy.boss ? 11 : 19);
+    }
+    if (enemy.phaseJustChanged) {
+      enemy.phaseJustChanged = false;
+      this.darkFlameBoss = enemy;
+      this.darkFlameTimer = enemy.config.phaseTwo?.darkFlameIntervalSeconds || 50;
+      this.ui.announce('終極 Boss 惡魔化！生命值翻倍，黑紫火焰即將週期性襲來');
+      this.cameras.main.flash(450, 136, 55, 180);
     }
     return enemy.hp < before;
   }
@@ -287,6 +331,68 @@ export class BootScene extends Phaser.Scene {
         this.hitEnemy(enemy, Math.round(55 + this.progress.magicBonus * 1.5));
     }
     this.ui.announce('藍色風暴：前、後、左、右同時擴散！');
+  }
+
+  private superLightning(): void {
+    if (this.form.active) return this.ui.announce('變身期間使用五色魔法、絕對防禦與流星雨');
+    if (this.sealLeft > 0 || this.lightningGauge < 100) {
+      this.ui.announce(this.sealLeft > 0 ? '詛咒暫時封鎖技能' : '全屏閃電量表尚未集滿');
+      return;
+    }
+    this.lightningGauge = 0;
+    const camera = this.cameras.main;
+    for (let i = 0; i < 7; i++) {
+      const image = this.add.image(camera.width / 2, camera.height / 2,
+        i % 2 ? 'super_lightning_gold' : 'super_lightning_blue')
+        .setScrollFactor(0).setDisplaySize(camera.width, camera.height)
+        .setAlpha(0).setDepth(11000);
+      this.tweens.add({ targets: image, alpha: { from: 0, to: .83 }, yoyo: true,
+        duration: 85, delay: i * 160, onComplete: () => image.destroy() });
+    }
+    // The entire active screen is struck; offscreen foes remain untouched.
+    for (const enemy of [...this.enemies]) {
+      if (enemy.alive && enemy.x >= camera.scrollX && enemy.x <= camera.scrollX + camera.width)
+        this.hitEnemy(enemy, Math.round(240 + this.progress.magicBonus * 2.2), false);
+    }
+    this.ui.announce('全屏閃電！藍金交錯，消耗獨立大招槽（不消耗 MP）');
+  }
+
+  private updateDarkFlame(dt: number): void {
+    const boss = this.darkFlameBoss;
+    const config = boss?.config.phaseTwo;
+    if (!boss?.alive || !boss.phaseTwo || !config) return;
+    if (this.darkFlameWarning > 0) {
+      this.darkFlameWarning = Math.max(0, this.darkFlameWarning - dt);
+      if (this.darkFlameWarning === 0) {
+        this.darkWarningVisual?.destroy();
+        this.darkWarningVisual = null;
+        const image = this.add.image(this.scale.width / 2, this.scale.height / 2, 'final_boss_dark_flame')
+          .setScrollFactor(0).setDisplaySize(this.scale.width, this.scale.height).setDepth(12000).setAlpha(.85);
+        this.tweens.add({ targets: image, alpha: 0, duration: 700, onComplete: () => image.destroy() });
+        // Fixed maximum-HP hit; rolling and Absolute Defense both avoid it.
+        const amount = Math.round(this.player.maxHp * config.darkFlameMaxHpRatio);
+        const taken = this.player.receiveDamage(amount);
+        if (taken) {
+          this.ui.announce(`黑紫火焰造成 ${taken} 傷害（血量上限的 30%）`);
+          if (this.player.snapshot.hp <= 0) {
+            this.deadPending = true;
+            this.time.delayedCall(1100, () => this.revive());
+          }
+        } else this.ui.announce('成功用翻滾或絕對防禦避開黑紫火焰！');
+        this.darkFlameTimer = config.darkFlameIntervalSeconds;
+      }
+      return;
+    }
+    this.darkFlameTimer -= dt;
+    if (this.darkFlameTimer <= 0) {
+      this.darkFlameWarning = config.darkFlameWarningSeconds;
+      this.darkWarningVisual = this.add.image(this.scale.width / 2, this.scale.height / 2,
+        'final_boss_dark_flame').setScrollFactor(0).setDisplaySize(this.scale.width, this.scale.height)
+        .setDepth(11000).setAlpha(.18);
+      this.tweens.add({ targets: this.darkWarningVisual, alpha: .42, duration: 260, yoyo: true, repeat: 2 });
+      this.ui.announce('黑紫火焰預警！倒數後全屏攻擊：翻滾或絕對防禦！');
+      this.cameras.main.flash(450, 115, 34, 139);
+    }
   }
 
   private transform(): void {
@@ -377,7 +483,30 @@ export class BootScene extends Phaser.Scene {
     if (pattern.kind === 'ranged') {
       this.spawnShot({ x: enemy.x + direction * 34, y: enemy.depthY, elevation: 0, direction,
         damage: pattern.damage, slow: pattern.slowSeconds || 0, seal: pattern.sealSeconds || 0,
-        owner: 'enemy', power: 0 });
+        owner: 'enemy', power: 0, element: pattern.element });
+      return;
+    }
+    if (pattern.kind === 'fire') {
+      const flame = this.add.graphics().setDepth(enemy.depthY + 7);
+      flame.fillStyle(0xff6b25, .5).fillRoundedRect(direction > 0 ? enemy.x : enemy.x - pattern.range,
+        enemy.depthY - 79, pattern.range, 86, 24);
+      this.tweens.add({ targets: flame, alpha: 0, duration: 550, onComplete: () => flame.destroy() });
+      if (Math.abs(p.x - enemy.x) < pattern.range && (p.x - enemy.x) * direction >= 0 &&
+        Math.abs(p.depthY - enemy.depthY) < 50) this.damagePlayer(pattern.damage, 'fire');
+      return;
+    }
+    if (pattern.kind === 'dive') {
+      const markX = p.x, markY = p.depthY;
+      const marker = this.add.graphics().setDepth(markY - 1).lineStyle(5, 0xff655c, .9)
+        .strokeEllipse(markX, markY, 135, 76);
+      this.time.delayedCall(650, () => {
+        marker.destroy();
+        if (!enemy.alive || this.finished || this.deadPending || !this.enemies.includes(enemy)) return;
+        enemy.x = Phaser.Math.Clamp(markX + direction * 35, 0, this.level.worldWidth);
+        enemy.depthY = markY;
+        if (Math.abs(p.x - markX) < 72 && Math.abs(p.depthY - markY) < 45)
+          this.damagePlayer(pattern.damage, 'dive');
+      });
       return;
     }
     if (pattern.kind === 'phase') {
@@ -457,8 +586,10 @@ export class BootScene extends Phaser.Scene {
       shot.x += shot.direction * (shot.owner === 'player' ? 380 : 245) * dt;
       const radius = shot.owner === 'player' ? 12 + Math.min(1, shot.life / .65) * (16 + shot.power * 15) : 10;
       shot.graphic.clear();
-      shot.graphic.fillStyle(shot.owner === 'player' ? 0xff6ac9 : shot.seal ? 0xc288ec : shot.slow ? 0xa9d0fa : 0xd0c4a4, .3).fillCircle(0, 0, radius + 9);
-      shot.graphic.fillStyle(shot.owner === 'player' ? 0xffa9e2 : shot.seal ? 0xa86acb : shot.slow ? 0x6ba9f2 : 0xbbb19c).fillCircle(0, 0, radius);
+      const color = shot.element === 'fire' ? 0xff782d : shot.element === 'ice' ? 0x6bbded :
+        shot.element === 'lightning' ? 0xffdd69 : shot.element === 'dark' ? 0x9a63d7 : 0xffa9e2;
+      shot.graphic.fillStyle(color, .3).fillCircle(0, 0, radius + 9);
+      shot.graphic.fillStyle(color).fillCircle(0, 0, radius);
       shot.graphic.setPosition(shot.x, shot.y - shot.elevation - 36).setDepth(shot.y + 5);
       let collided = false;
       if (shot.owner === 'player') {
@@ -557,13 +688,15 @@ export class BootScene extends Phaser.Scene {
     const forest = this.level.number === 2;
     const grave = this.level.number === 3;
     const camp = this.level.number === 4;
-    const sky = grave ? 0x27324f : camp ? 0x945c48 : forest ? 0x203c4f : 0x77aae2;
-    const horizonColor = grave ? 0x717b86 : camp ? 0xd69b68 : forest ? 0x5c8675 : 0xc6dcf4;
+    const lair = this.level.number === 5;
+    const heaven = this.level.number === 6;
+    const sky = heaven ? 0x466cba : lair ? 0x462338 : grave ? 0x27324f : camp ? 0x945c48 : forest ? 0x203c4f : 0x77aae2;
+    const horizonColor = heaven ? 0xe7c7fa : lair ? 0xa44844 : grave ? 0x717b86 : camp ? 0xd69b68 : forest ? 0x5c8675 : 0xc6dcf4;
     g.fillGradientStyle(sky, sky, horizonColor, horizonColor).fillRect(0, 0, w, h);
     const horizon = h * (h > this.scale.width ? .32 : .40);
-    g.fillStyle(grave ? 0x404858 : camp ? 0x6b5247 : forest ? 0x314b3a : 0x7db878).fillRect(0, horizon, w, h - horizon);
+    g.fillStyle(heaven ? 0xa8b9e5 : lair ? 0x332d40 : grave ? 0x404858 : camp ? 0x6b5247 : forest ? 0x314b3a : 0x7db878).fillRect(0, horizon, w, h - horizon);
     for (let x = 150; x < w; x += forest ? 220 : 320) {
-      g.fillStyle(grave ? 0x626d79 : camp ? 0x97715b : forest ? 0x425f4c : 0x89ba82)
+      g.fillStyle(heaven ? 0xeaf3ff : lair ? 0x704755 : grave ? 0x626d79 : camp ? 0x97715b : forest ? 0x425f4c : 0x89ba82)
         .fillEllipse(x, horizon - 8, forest ? 110 : 160, forest ? 160 : 48);
       if (forest) {
         g.fillStyle(0x423d3a).fillRect(x - 9, horizon - 120, 18, 127);
@@ -572,16 +705,22 @@ export class BootScene extends Phaser.Scene {
         g.fillStyle(0x939ba3).fillRoundedRect(x - 15, horizon - 55, 30, 55, 12);
         g.fillStyle(0x323849).fillRect(x - 3, horizon - 42, 6, 26).fillRect(x - 10, horizon - 35, 20, 5);
         g.lineStyle(3, 0x303b4b).lineBetween(x + 72, horizon - 105, x + 78, horizon + 2);
+      } else if (heaven) {
+        g.fillStyle(0xffffff, .65).fillEllipse(x + 35, horizon - 85, 240, 42);
+        g.lineStyle(4, 0xf4e6ba).lineBetween(x - 28, horizon - 5, x + 35, horizon - 100);
+      } else if (lair) {
+        g.fillStyle(0x251b32).fillTriangle(x - 65, horizon + 5, x, horizon - 135, x + 70, horizon + 5);
+        g.fillStyle(0xff653b, .7).fillEllipse(x + 104, horizon + 3, 40, 18);
       } else if (camp) {
         g.fillStyle(0x593f37).fillTriangle(x - 52, horizon + 7, x, horizon - 84, x + 55, horizon + 7);
         g.lineStyle(3, 0xd0a280).lineBetween(x, horizon - 84, x, horizon + 5);
         g.fillStyle(0xe9964b, .65).fillCircle(x + 90, horizon - 9, 12);
       }
     }
-    g.fillStyle(grave ? 0x63645b : camp ? 0xa48561 : forest ? 0x708467 : 0xb7c895)
+    g.fillStyle(heaven ? 0xd3d9e9 : lair ? 0x4c3641 : grave ? 0x63645b : camp ? 0xa48561 : forest ? 0x708467 : 0xb7c895)
       .fillRect(0, horizon + 25, w, h - horizon - 25);
     for (let x = 0; x < w; x += 150) {
-      g.fillStyle(grave ? 0xb7b8bc : camp ? 0xf3ba75 : forest ? 0xa0bc87 : 0xf3e4a0, .52)
+      g.fillStyle(heaven ? 0xffffff : lair ? 0xff8e50 : grave ? 0xb7b8bc : camp ? 0xf3ba75 : forest ? 0xa0bc87 : 0xf3e4a0, .52)
         .fillCircle(x + 55, h * .75 + x % 41, 3);
     }
     this.drawMarkers();

@@ -14,6 +14,7 @@ html, body, #game { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 .mp i { background: linear-gradient(90deg, #2784e8, #82d5ff); }
 .storm i { background: linear-gradient(90deg, #285de9, #8addff); }
 .form i { background: linear-gradient(90deg, #a666dd, #ffe1fa); }
+.lightning i { background: linear-gradient(90deg, #439aff, #eac65c); }
 #status { font-size: 12px; line-height: 1.3; color: #e6ecff; }
 #sprite-gallery { pointer-events: auto; display: inline-block; margin-top: 5px; color: #b9e6ff; font-size: 11px; }
 #hint { position: absolute; top: calc(16px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); border-radius: 12px; padding: 8px 11px; max-width: 44vw; background: #0a1c38bb; color: #e6ecff; font-size: 12px; }
@@ -38,9 +39,11 @@ html, body, #game { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 #action-zone button.special { right: 92px; bottom: 5px; background: #d247a0; }
 #action-zone button.attack { right: 0; bottom: 10px; width: 86px; height: 86px; background: #b74d76; }
 #action-zone button.storm-action { right: 245px; bottom: 90px; background: #337fcc; }
+#action-zone button.lightning-action { right: 247px; bottom: 178px; background: linear-gradient(135deg, #2b71dd, #d0a43e); }
 #action-zone button.transform-action { right: 185px; bottom: 7px; background: #955fc4; }
 #action-zone button.form-action { display: none; background: #955fc4; }
 #overlay.transformed #action-zone button.storm-action,
+#overlay.transformed #action-zone button.lightning-action,
 #overlay.transformed #action-zone button.transform-action,
 #overlay.transformed #action-zone button.special { display: none; }
 #overlay.transformed #action-zone button.form-action { display: block; }
@@ -50,9 +53,9 @@ html, body, #game { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 #overlay.transformed #action-zone button.attack { background: #884abc; }
 @media (orientation: portrait) {
   #hud { max-width: 75vw; }
-  #hint { top: calc(130px + env(safe-area-inset-top)); right: 12px; max-width: 70vw; font-size: 11px; }
-  #menu-toggle { top: calc(190px + env(safe-area-inset-top)); }
-  #menu-panel { top: calc(235px + env(safe-area-inset-top)); max-height: 43vh; max-height: 43dvh; }
+  #hint { display: none; }
+  #menu-toggle { top: calc(270px + env(safe-area-inset-top)); }
+  #menu-panel { top: calc(315px + env(safe-area-inset-top)); max-height: 38vh; max-height: 38dvh; }
   #move-zone { height: 35%; width: 45%; }
   #action-zone { transform: scale(.8); transform-origin: right bottom; width: 330px; }
 }

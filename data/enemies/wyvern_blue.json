@@ -1,0 +1,1 @@
+{"id":"wyvern_blue","displayName":"藍色飛龍","type":"normal","stage":6,"hp":220,"speed":105,"color":6453700,"coinDrop":38,"skillPointDrop":0,"patterns":[{"id":"ice","damage":19,"range":320,"cooldown":3.1,"windup":0.7,"kind":"ranged","element":"ice","slowSeconds":2.2}],"spriteRef":"assets/sprites/wyvern_blue.png"}

@@ -1,0 +1,1 @@
+{"id":"wyvern_green","displayName":"綠色飛龍","type":"normal","stage":6,"hp":235,"speed":100,"color":6279810,"coinDrop":38,"skillPointDrop":0,"patterns":[{"id":"venom","damage":16,"range":310,"cooldown":3.4,"windup":0.8,"kind":"poison"}],"spriteRef":"assets/sprites/wyvern_green.png"}
