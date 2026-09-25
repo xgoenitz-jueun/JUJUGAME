@@ -1,4 +1,4 @@
-name: Deploy mobile preview to GitHub Pages
+name: Deploy fan game to GitHub Pages
 
 on:
   push:
@@ -40,6 +40,6 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist
-      - name: Deploy preview
+      - name: Deploy site
         id: deployment
         uses: actions/deploy-pages@v4

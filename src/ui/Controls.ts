@@ -24,7 +24,7 @@ export class Controls {
     this.root = document.createElement('div');
     this.root.id = 'overlay';
     this.root.innerHTML = `
-      <div id="hud"><div class="hud-title">Phase 5 · 試玩預覽</div>
+      <div id="hud"><div class="hud-title">珠珠橫向冒險 · 第一關</div>
         <div id="progress">第一關 · Lv3 · 金錢 0 · 點數 0</div>
         <div class="bar-label">HP <span id="hp-value"></span></div><div class="bar hp"><i id="hp-fill"></i></div>
         <div class="bar-label">MP <span id="mp-value"></span></div><div class="bar mp"><i id="mp-fill"></i></div>
@@ -32,7 +32,7 @@ export class Controls {
         <div class="bar-label">變身 <span id="form-value">0%</span></div><div class="bar form"><i id="form-fill"></i></div>
         <div class="bar-label">全屏閃電 <span id="lightning-value">0%</span></div><div class="bar lightning"><i id="lightning-fill"></i></div>
         <div id="status" role="status" aria-live="polite">移動靠近練習標靶，試試三段連擊</div>
-        <a id="sprite-gallery" href="./sprites.html">檢視本次角色與技能圖片</a>
+        <a id="sprite-gallery" href="./sprites.html">角色與技能圖鑑</a>
       </div>
       <section id="boss-health" role="meter" aria-label="Boss 血量" aria-valuemin="0" hidden>
         <div class="bar-label"><strong id="boss-name"></strong><span id="boss-value"></span></div>
@@ -55,6 +55,7 @@ export class Controls {
         <button data-action="shield" class="form-action shield-action" aria-label="絕對防禦">防禦</button>
         <button data-action="meteor" class="form-action meteor-action" aria-label="流星雨">流星</button>
       </div>
+      <small id="fan-notice">粉絲自製非營利作品，僅供同好交流</small>
       <aside id="tutorial" role="status" aria-live="polite" hidden>
         <strong>遊戲提示</strong><p id="tutorial-message"></p><button id="tutorial-dismiss" type="button">知道了</button>
       </aside>
@@ -188,7 +189,7 @@ export class Controls {
   }
 
   renderMenu(progress: Progression, stageName: string): void {
-    (this.root.querySelector('.hud-title') as HTMLElement).textContent = `Phase 5 · ${stageName}`;
+    (this.root.querySelector('.hud-title') as HTMLElement).textContent = `珠珠橫向冒險 · ${stageName}`;
     (this.root.querySelector('#progress') as HTMLElement).textContent = `Lv${progress.data.level} · 金錢 ${progress.data.coins} · 可用點數 ${progress.unspent}`;
     const panel = this.root.querySelector('#menu-panel') as HTMLElement;
     const rows = progress.items().map(item => `<div class="menu-row"><span>${item.name} · ${item.price} 金</span><button data-menu="buy" data-id="${item.id}">購買</button></div>`).join('');

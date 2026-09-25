@@ -1,16 +1,16 @@
 # Q版娃娃橫向捲軸打怪遊戲
 
-本專案依 `00_README_使用說明.md`、`01_GDD_核心遊戲設計.md`、`02_關卡與怪物設計.md`、`03_技術架構與GitHub整合.md`、`04_分階段執行與授權計畫.md` 建置，並依 04 文件的 Phase 0→6 順序推進。
+本專案依 `docs/` 中的五份設計文件建置，為粉絲自製非營利作品，僅供同好交流。
 
 ## 目前進度
 
-Phase 0–3 已完成。Phase 4 試玩版加入獨立全屏閃電量表、第五關混合怪與巨大紅龍、隱藏第六關五色飛龍及終極 Boss 二階段。變身最終外型採用白蝴蝶結白裙娃娃，五色魔法附加效果沿用已確認預設值。第六關 Boss 目前使用既有棒球形態／惡魔形態圖片，最終外型仍依 04 文件等待美術確認。
+六關主體、變身、全屏閃電、圖鑑與結局動畫已完成驗收。變身外型採用白蝴蝶結白裙娃娃；第六關 Boss 沿用既有棒球形態／惡魔形態圖片。
 
-## 手機試玩預覽
+## 免費遊玩
 
-GitHub Pages 預覽網址：`https://xgoenitz-jueun.github.io/JUJUGAME/`。啟用 GitHub Pages 並將來源設為 **GitHub Actions** 後，每次推送到 `main`，`.github/workflows/deploy.yml` 會自動測試、建置並部署；也可從 Actions 手動重新執行。建置時使用 `/JUJUGAME/` 作為 Vite 基底路徑，確保手機瀏覽器可以載入 CSS 與 JavaScript。
+GitHub Pages 網址：`https://xgoenitz-jueun.github.io/JUJUGAME/`。每次推送到 `main`，`.github/workflows/deploy.yml` 會自動測試、建置並部署；建置時使用 `/JUJUGAME/` 作為 Vite 基底路徑。
 
-此網址供手機試玩，公開網址仍可能被其他人存取；正式發布及上架依 04 文件 Phase 6 另行決定。GitHub 免費方案若使用私人倉庫，必須先將倉庫改成公開才能啟用 Pages，此操作會公開整個倉庫的原始碼與文件。
+此網址供粉絲圈免費遊玩；不涉及 App 商店上架或商業販售。
 
 ## 本機執行
 
@@ -43,7 +43,7 @@ npm test
 
 此測試以合成指標事件驗證按鍵、搖桿和 CSS 事件規則，不含真實瀏覽器的像素命中檢查；請以手機試玩確認手感與點擊範圍。
 
-在執行指令的電腦也可開啟 `http://localhost:5173/`。頁面使用 `width=device-width`、`viewport-fit=cover`、`100dvh` 和安全區間距；實際手機手感仍請以裝置確認。這個 Pages 網址已由使用者授權作測試預覽；正式發表仍依 Phase 6 另外決定。
+在執行指令的電腦也可開啟 `http://localhost:5173/`。頁面使用 `width=device-width`、`viewport-fit=cover`、`100dvh` 和安全區間距；實際手機手感仍請以裝置確認。
 
 ## Phase 1 操作
 
@@ -74,4 +74,4 @@ npm test
 - `data/enemies`、`data/levels`、`data/shop`、`data/progression`：資料驅動設定。
 - `assets/sprites`、`assets/backgrounds`、`assets/audio`：素材預留目錄。
 
-五份原始規格置於 `docs/`。Phase 3 變身外型與五色附加效果已於本次確認；涉及商標的結局文字留待 04 文件 Phase 5 節點。
+五份原始規格置於 `docs/`；變身外型、五色附加效果與結局文字已按驗收結果實作。
