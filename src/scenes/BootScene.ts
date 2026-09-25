@@ -26,8 +26,12 @@ type Shot = { x: number; y: number; elevation: number; direction: number; damage
   element?: 'fire' | 'ice' | 'lightning' | 'dark' };
 type Drop = { x: number; y: number; coins: number; points: number; graphic: Phaser.GameObjects.Graphics };
 type Hazard = { x: number; y: number; radius: number; left: number; tick: number; graphic: Phaser.GameObjects.Graphics };
+type MeteorEffect = { elapsed: number; pulses: number; damage: number; stage: number;
+  image: Phaser.GameObjects.Image; streaks: Phaser.GameObjects.Graphics };
 const LEVELS: Record<number, Level> = { 1: stage1, 2: stage2, 3: stage3, 4: stage4, 5: stage5, 6: stage6 };
 const COLORS = [0xff814c, 0x60cfff, 0xf7de69, 0x8ed976, 0xe992f5];
+const METEOR_DURATION = 1.2;
+const METEOR_IMPACTS = [0.28, 0.6, 0.95];
 
 /** JSON drives enemy stats, layouts, checkpoints and shop items. */
 export class BootScene extends Phaser.Scene {
@@ -50,6 +54,7 @@ export class BootScene extends Phaser.Scene {
   private darkWarningVisual: Phaser.GameObjects.Image | null = null;
   private stormCooldown = 0;
   private meteorUsed = false;
+  private meteorEffect: MeteorEffect | null = null;
   private specialLock = 0;
   private sealLeft = 0;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -166,6 +171,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   private clearStage(): void {
+    this.clearMeteorEffect();
     this.darkWarningVisual?.destroy();
     this.darkWarningVisual = null;
     this.enemies.forEach(enemy => enemy.destroy());
@@ -256,6 +262,7 @@ export class BootScene extends Phaser.Scene {
       this.updateShots(dt);
       this.updateHazards(dt);
     }
+    this.updateMeteorEffect(dt);
     this.ui.setMeters(p.hp, p.mp, this.player.maxHp, this.player.maxMp);
     this.ui.setSkills(this.stormGauge, this.form, this.lightningGauge);
     const boss = this.enemies.find(enemy => enemy.boss && enemy.alive);
@@ -485,14 +492,58 @@ export class BootScene extends Phaser.Scene {
     this.meteorUsed = true;
     this.specialLock = .6;
     const camera = this.cameras.main;
-    const image = this.add.image(camera.scrollX + camera.width / 2, camera.height / 2,
-      'transform_meteor_rain').setDisplaySize(camera.width, camera.height).setScrollFactor(0).setAlpha(.9).setDepth(10000);
-    this.tweens.add({ targets: image, alpha: 0, duration: 850, onComplete: () => image.destroy() });
-    for (const enemy of this.enemies) {
-      if (enemy.alive && enemy.x >= camera.scrollX && enemy.x <= camera.scrollX + camera.width)
-        this.hitEnemy(enemy, Math.round((105 + this.progress.magicBonus) * 2));
+    const image = this.add.image(camera.width / 2, camera.height * .05, 'transform_meteor_rain')
+      .setScrollFactor(0).setDepth(9000).setAlpha(0);
+    const source = this.textures.get('transform_meteor_rain').getSourceImage() as HTMLImageElement;
+    image.setScale(Math.max(camera.width / source.width, camera.height / source.height));
+    const streaks = this.add.graphics().setScrollFactor(0).setDepth(9001);
+    this.meteorEffect = { elapsed: 0, pulses: 0, damage: Math.round((105 + this.progress.magicBonus) * 2),
+      stage: this.level.number, image, streaks };
+    this.drawMeteorStreaks(streaks, 0, camera.width, camera.height);
+    this.ui.announce('流星雨降下！1.2 秒內連續轟擊畫面內的敵人');
+  }
+
+  private updateMeteorEffect(dt: number): void {
+    const effect = this.meteorEffect;
+    if (!effect) return;
+    if (effect.stage !== this.level.number) { this.clearMeteorEffect(); return; }
+    effect.elapsed = Math.min(METEOR_DURATION, effect.elapsed + dt);
+    const progress = effect.elapsed / METEOR_DURATION;
+    const camera = this.cameras.main;
+    effect.image.setPosition(camera.width / 2, camera.height * (.05 + .6 * progress))
+      .setAlpha(.85 * Math.min(1, progress * 6) * Math.min(1, (1 - progress) * 6));
+    this.drawMeteorStreaks(effect.streaks, effect.elapsed, camera.width, camera.height);
+    while (effect.pulses < METEOR_IMPACTS.length && effect.elapsed >= METEOR_IMPACTS[effect.pulses]) {
+      const index = effect.pulses++;
+      const damage = Math.floor(effect.damage / METEOR_IMPACTS.length) +
+        (index < effect.damage % METEOR_IMPACTS.length ? 1 : 0);
+      for (const enemy of this.enemies) {
+        if (enemy.alive && enemy.x >= camera.scrollX && enemy.x <= camera.scrollX + camera.width)
+          this.hitEnemy(enemy, damage);
+        if (this.meteorEffect !== effect || this.finished) break;
+      }
+      if (this.meteorEffect !== effect || this.finished) break;
     }
-    this.ui.announce('流星雨：攻擊目前畫面內全部敵人');
+    if (this.meteorEffect === effect && effect.elapsed >= METEOR_DURATION) this.clearMeteorEffect();
+  }
+
+  private drawMeteorStreaks(g: Phaser.GameObjects.Graphics, elapsed: number, width: number, height: number): void {
+    g.clear();
+    for (let i = 0; i < 18; i++) {
+      const path = ((elapsed / METEOR_DURATION * 1.6 + i * .17) % 1.35) / 1.35;
+      const x = width * ((i * .618 + .1) % 1) + width * .12 * path;
+      const y = (height + 170) * path - 105;
+      const color = i % 3 === 0 ? 0xa76aff : i % 3 === 1 ? 0xffa45d : 0x79aaff;
+      g.lineStyle(6 + i % 3, color, .7).lineBetween(x - 25, y - 95, x, y);
+      g.lineStyle(2, 0xffe4ae, .9).lineBetween(x - 13, y - 48, x, y);
+      g.fillStyle(0xffd695, .95).fillCircle(x, y, 5 + i % 3);
+    }
+  }
+
+  private clearMeteorEffect(): void {
+    this.meteorEffect?.image.destroy();
+    this.meteorEffect?.streaks.destroy();
+    this.meteorEffect = null;
   }
 
   private enemyAttack(enemy: Enemy, pattern: Pattern): void {
