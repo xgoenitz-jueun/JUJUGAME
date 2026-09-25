@@ -6,9 +6,10 @@ new Phaser.Game({
   parent: 'game',
   width: 960,
   height: 540,
-  backgroundColor: '#000000',
+  backgroundColor: '#16243e',
+  render: { antialias: true, pixelArt: false },
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
   scene: [BootScene]
