@@ -82,8 +82,13 @@ export class Controls {
     this.centerX = event.clientX;
     this.centerY = event.clientY;
     const rect = this.arena.getBoundingClientRect();
-    this.joystick.style.left = `${event.clientX - rect.left}px`;
-    this.joystick.style.top = `${event.clientY - rect.top}px`;
+    // Keep the visible ring inside the touch area and away from browser/safe-area edges.
+    const clamp = (position: number, size: number) => {
+      const margin = Math.min(57, size / 2);
+      return Math.max(margin, Math.min(size - margin, position));
+    };
+    this.joystick.style.left = `${clamp(event.clientX - rect.left, rect.width)}px`;
+    this.joystick.style.top = `${clamp(event.clientY - rect.top, rect.height)}px`;
     this.joystick.classList.add('visible');
     this.moveStick(event);
   };

@@ -46,7 +46,7 @@ class Element {
   }
   setPointerCapture(id) { this.captured = id; }
   setAttribute(name, value) { this[name] = value; }
-  getBoundingClientRect() { return { left: 0, top: 0 }; }
+  getBoundingClientRect() { return { left: 0, top: 0, width: 200, height: 200 }; }
   dispatch(name, properties = {}) {
     const event = { pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, ...properties };
     for (const handler of this.listeners.get(name) || []) handler(event);
@@ -102,6 +102,15 @@ test('浮動搖桿限制幅度、忽略其他手指並在取消時歸零', () =>
   controls.destroy();
 });
 
+test('從觸控區邊緣啟動搖桿時，外圈維持在可見的安全區內', () => {
+  const { controls, root } = setup();
+  root.querySelector('#move-zone').dispatch('pointerdown', { clientX: 4, clientY: 198 });
+  const ring = root.querySelector('#joystick');
+  assert.equal(ring.style.left, '57px');
+  assert.equal(ring.style.top, '143px');
+  controls.destroy();
+});
+
 test('HUD 更新生命、魔力和操作回饋', () => {
   const { controls, root } = setup();
   controls.setMeters(63, 24.4);
@@ -146,4 +155,14 @@ test('CSS 允許遊戲畫面穿透，但搖桿與按鍵能接收事件', () => {
   assert.match(rule('#menu-toggle'), /pointer-events:\s*auto/);
   assert.match(rule('#action-zone button'), /opacity:\s*\.50/);
   assert.match(css, /env\(safe-area-inset-(?:top|left|right|bottom)\)/);
+});
+
+test('手機 viewport 與動態可視高度、四邊安全區皆有設定', () => {
+  const html = fs.readFileSync('index.html', 'utf8');
+  const css = fs.readFileSync('src/style.css', 'utf8');
+  assert.match(html, /<meta\s+name="viewport"\s+content="[^"]*width=device-width[^"]*viewport-fit=cover[^"]*"/);
+  assert.match(css, /#game\s*\{[^}]*height:\s*100vh;\s*height:\s*100dvh/);
+  for (const side of ['top', 'left', 'right', 'bottom']) {
+    assert.match(css, new RegExp(`env\\(safe-area-inset-${side}\\)`));
+  }
 });
