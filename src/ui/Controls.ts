@@ -34,6 +34,10 @@ export class Controls {
         <div id="status" role="status" aria-live="polite">移動靠近練習標靶，試試三段連擊</div>
         <a id="sprite-gallery" href="./sprites.html">檢視本次角色與技能圖片</a>
       </div>
+      <section id="boss-health" role="meter" aria-label="Boss 血量" aria-valuemin="0" hidden>
+        <div class="bar-label"><strong id="boss-name"></strong><span id="boss-value"></span></div>
+        <div class="bar boss-hp"><i id="boss-fill"></i></div>
+      </section>
       <div id="hint">WASD 移動 · J 攻擊 · G 氣功 · B 風暴 · V 閃電 · T 變身 · F 五色 · H 防禦 · M 流星雨</div>
       <button id="menu-toggle" aria-label="開關背包商店與配點選單" aria-expanded="false">背包／商店</button>
       <section id="menu-panel" aria-label="背包商店與配點" hidden></section>
@@ -154,6 +158,19 @@ export class Controls {
     (this.root.querySelector('#mp-fill') as HTMLElement).style.width = `${Math.max(0, mp / maxMp * 100)}%`;
     (this.root.querySelector('#hp-value') as HTMLElement).textContent = `${Math.ceil(hp)} / ${maxHp}`;
     (this.root.querySelector('#mp-value') as HTMLElement).textContent = `${Math.ceil(mp)} / ${maxMp}`;
+  }
+
+  setBossHealth(boss: { name: string; hp: number; maxHp: number } | null): void {
+    const panel = this.root.querySelector('#boss-health') as HTMLElement;
+    panel.hidden = !boss;
+    this.root.classList.toggle('boss-active', !!boss);
+    if (!boss) return;
+    const hp = Math.max(0, Math.min(boss.hp, boss.maxHp));
+    (this.root.querySelector('#boss-name') as HTMLElement).textContent = boss.name;
+    (this.root.querySelector('#boss-value') as HTMLElement).textContent = `${Math.ceil(hp)} / ${boss.maxHp}`;
+    (this.root.querySelector('#boss-fill') as HTMLElement).style.width = `${boss.maxHp > 0 ? hp / boss.maxHp * 100 : 0}%`;
+    panel.setAttribute('aria-valuenow', String(Math.ceil(hp)));
+    panel.setAttribute('aria-valuemax', String(boss.maxHp));
   }
 
   setSkills(storm: number, form: Transformation, lightning = 0): void {

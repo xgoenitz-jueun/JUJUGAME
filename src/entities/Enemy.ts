@@ -46,6 +46,7 @@ export class Enemy {
   private windup = 0;
   private nextPattern = 0;
   private selected: Pattern | null = null;
+  private lunge: { direction: number; remaining: number; speed: number; onStep: (from: number, to: number) => void } | null = null;
   private flash = 0;
   private faceRight = false;
   private phaseLeft = 0;
@@ -83,7 +84,19 @@ export class Enemy {
     this.buffLeft = Math.max(0, this.buffLeft - dt);
     const speedMultiplier = this.enraged || this.phaseTwo ? 1.35 : 1;
     const cooldownMultiplier = this.enraged || this.buffLeft > 0 ? 1.3 : 1;
-    if (this.selected && this.status.canAttack) {
+    if (this.lunge) {
+      // Travel through the warned lane over several frames; a status effect can interrupt it.
+      if (!this.status.canAttack) this.lunge = null;
+      else if (this.status.moveMultiplier > 0) {
+        const rush = this.lunge;
+        const step = Math.min(rush.remaining, rush.speed * this.status.moveMultiplier * dt);
+        const from = this.x;
+        this.x += rush.direction * step;
+        rush.remaining -= step;
+        rush.onStep(from, this.x);
+        if (rush.remaining <= 0) this.lunge = null;
+      }
+    } else if (this.selected && this.status.canAttack) {
       this.windup -= dt;
       if (this.windup <= 0) {
         this.attack(this, this.selected);
@@ -115,6 +128,10 @@ export class Enemy {
     this.render();
   }
 
+  beginLunge(direction: number, distance: number, speed: number, onStep: (from: number, to: number) => void): void {
+    this.lunge = { direction: Math.sign(direction) || 1, remaining: distance, speed, onStep };
+  }
+
   hit(damage: number): boolean {
     if (!this.alive) return false;
     if (this.phaseLeft > 0) return false;
@@ -126,6 +143,7 @@ export class Enemy {
       this.maxHp = Math.round(this.maxHp * this.config.phaseTwo.maxHpMultiplier);
       this.hp = this.maxHp;
       this.selected = null;
+      this.lunge = null;
       this.windup = 0;
       this.cooldown = 2;
       this.sprite.setTexture(`${this.config.id}_phase2`);
@@ -152,6 +170,7 @@ export class Enemy {
     // Stun breaks a warned attack; freeze holds its windup until thawed.
     if (color === 'purple') {
       this.selected = null;
+      this.lunge = null;
       this.windup = 0;
       this.cooldown = Math.max(this.cooldown, .4);
     }
@@ -186,7 +205,13 @@ export class Enemy {
       g.lineStyle(7, 0x795037).lineBetween(this.x + 22, this.depthY - 40, this.x + 43, this.depthY - 79);
     }
     if (this.selected) {
-      if (this.selected.kind === 'laser') {
+      if (this.selected.kind === 'lunge') {
+        const direction = this.faceRight ? 1 : -1;
+        g.lineStyle(7, 0xffad57, .7).lineBetween(this.x, this.depthY - 8,
+          this.x + direction * Math.min(this.selected.range, this.config.id === 'orc' ? 165 : 42), this.depthY - 8);
+        g.fillStyle(0xffdf91, .85).fillTriangle(this.x + direction * 24, this.depthY - 70,
+          this.x + direction * 12, this.depthY - 85, this.x + direction * 36, this.depthY - 85);
+      } else if (this.selected.kind === 'laser') {
         g.lineStyle(4, 0xeeb0ff, .85).lineBetween(this.x, this.depthY - 56,
           this.x + (this.faceRight ? 1 : -1) * this.selected.range, this.depthY - 56);
       } else {
@@ -194,6 +219,8 @@ export class Enemy {
         g.lineStyle(2, 0xffa878, .65).strokeEllipse(this.x, this.depthY, this.selected.range * 2, 48);
       }
     }
+    if (this.lunge) g.lineStyle(5, 0xffa05f, .8).lineBetween(this.x - this.lunge.direction * 32,
+      this.depthY - 12, this.x, this.depthY - 12);
     if (this.status.has('red')) {
       g.fillStyle(0xff7937, .75).fillCircle(this.x - 20, this.depthY - 48, 5)
         .fillCircle(this.x + 18, this.depthY - 55, 4);

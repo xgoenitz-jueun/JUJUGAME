@@ -258,6 +258,11 @@ export class BootScene extends Phaser.Scene {
     }
     this.ui.setMeters(p.hp, p.mp, this.player.maxHp, this.player.maxMp);
     this.ui.setSkills(this.stormGauge, this.form, this.lightningGauge);
+    const boss = this.enemies.find(enemy => enemy.boss && enemy.alive);
+    const camera = this.cameras.main;
+    this.ui.setBossHealth(boss && boss.x >= camera.scrollX - 30 && boss.x <= camera.scrollX + camera.width + 30
+      ? { name: boss.phaseTwo ? `${boss.config.displayName} · 惡魔形態` : boss.config.displayName,
+          hp: boss.hp, maxHp: boss.maxHp } : null);
   }
 
   private updateTutorials(): void {
@@ -557,7 +562,20 @@ export class BootScene extends Phaser.Scene {
         .lineBetween(enemy.x, enemy.depthY - 56, enemy.x + direction * pattern.range, enemy.depthY - 56);
       this.tweens.add({ targets: beam, alpha: 0, duration: 450, onComplete: () => beam.destroy() });
     }
-    if (pattern.kind === 'lunge') enemy.x += direction * (enemy.config.id === 'orc' ? 95 : 32);
+    if (pattern.kind === 'lunge' && enemy.config.id === 'orc') {
+      let hit = false;
+      enemy.beginLunge(direction, 165, 240, (from, to) => {
+        if (hit || this.deadPending || this.finished) return;
+        const target = this.player.snapshot;
+        if (target.x >= Math.min(from, to) - 45 && target.x <= Math.max(from, to) + 45 &&
+          Math.abs(target.depthY - enemy.depthY) < 47) {
+          hit = true;
+          this.damagePlayer(pattern.damage, 'lunge');
+        }
+      });
+      return;
+    }
+    if (pattern.kind === 'lunge') enemy.x += direction * 32;
     const range = pattern.range + (pattern.kind === 'wave' ? 10 : 0);
     const canHit = Math.abs(p.x - enemy.x) < range && Math.abs(p.depthY - enemy.depthY) <
       (pattern.kind === 'wave' ? 95 : pattern.kind === 'laser' ? 38 : 47);

@@ -1,0 +1,8 @@
+{
+  "stageUnlock": 6,
+  "items": [
+    { "id": "sky_weapon", "name": "星穹武器", "type": "equipment", "slot": "weapon", "strBonus": 20, "price": 480 },
+    { "id": "sky_armor", "name": "星穹防具", "type": "equipment", "slot": "armor", "defBonus": 18, "price": 480 },
+    { "id": "sky_charm", "name": "星穹飾品", "type": "equipment", "slot": "accessory", "vitBonus": 7, "price": 420 }
+  ]
+}

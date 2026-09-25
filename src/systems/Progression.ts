@@ -3,6 +3,7 @@ import stage1Shop from '../../data/shop/stage1.json';
 import stage2Shop from '../../data/shop/stage2.json';
 import stage3Shop from '../../data/shop/stage3.json';
 import stage4Shop from '../../data/shop/stage4.json';
+import stage6Shop from '../../data/shop/stage6.json';
 
 export type Stat = 'STR' | 'DEF' | 'MAGIC' | 'SPD' | 'VIT';
 export type Slot = 'weapon' | 'armor' | 'accessory';
@@ -52,7 +53,8 @@ export class Progression {
 
   items(stage = this.data.stage): ShopItem[] {
     return [...stage1Shop.items, ...(stage >= 2 ? stage2Shop.items : []),
-      ...(stage >= 3 ? stage3Shop.items : []), ...(stage >= 4 ? stage4Shop.items : [])] as ShopItem[];
+      ...(stage >= 3 ? stage3Shop.items : []), ...(stage >= 4 ? stage4Shop.items : []),
+      ...(stage >= 6 ? stage6Shop.items : [])] as ShopItem[];
   }
   item(id: string): ShopItem | undefined { return this.items().find(x => x.id === id); }
 
