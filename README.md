@@ -6,6 +6,12 @@
 
 Phase 0、Phase 1 已完成。Phase 2 的第一、二關、史萊姆／哥布林／小野狼／小老虎、傳送點、經濟與裝備／配點原型已接上。角色與怪物目前皆為程式繪製的佔位圖，正式造型需要依 04 文件的人工作品確認。
 
+## 手機試玩預覽
+
+GitHub Pages 預覽網址：`https://xgoenitz-jueun.github.io/JUJUGAME/`。啟用 GitHub Pages 並將來源設為 **GitHub Actions** 後，每次推送到 `main`，`.github/workflows/deploy.yml` 會自動測試、建置並部署；也可從 Actions 手動重新執行。建置時使用 `/JUJUGAME/` 作為 Vite 基底路徑，確保手機瀏覽器可以載入 CSS 與 JavaScript。
+
+此網址供手機試玩，公開網址仍可能被其他人存取；正式發布及上架依 04 文件 Phase 6 另行決定。GitHub 免費方案若使用私人倉庫，必須先將倉庫改成公開才能啟用 Pages，此操作會公開整個倉庫的原始碼與文件。
+
 ## 本機執行
 
 需要 Node.js 20.19+ 或 22.12+。
